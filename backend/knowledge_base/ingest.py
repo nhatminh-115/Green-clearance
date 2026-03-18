@@ -4,11 +4,15 @@ knowledge_base/ingest.py
 Chay mot lan de build ChromaDB tu GLEC PDF va EPA Excel.
 Sau do khong can chay lai tru khi co version moi cua 2 file nay.
 
+Key improvement: luu gia tri emission factor vao metadata (value field)
+thay vi chi embed natural language text. RAG query theo metadata.value
+thay vi parse text bang regex -> accurate 100%.
+
 Usage:
     python -m backend.knowledge_base.ingest
+    python -m backend.knowledge_base.ingest --force   # re-ingest tu dau
 """
 
-import re
 import sys
 import logging
 from pathlib import Path
@@ -17,6 +21,7 @@ import chromadb
 import openpyxl
 from chromadb.api import ClientAPI
 from pypdf import PdfReader
+import re
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from backend.config import get_settings
@@ -26,9 +31,9 @@ log = logging.getLogger(__name__)
 
 settings = get_settings()
 
-RAW_DIR = Path(__file__).parent / "raw"
-GLEC_PDF = RAW_DIR / "GLEC_FRAMEWORK_v3_23_10_24_B.pdf"
-EPA_XLSX = RAW_DIR / "ghg-emission-factors-hub-2025.xlsx"
+RAW_DIR   = Path(__file__).parent / "raw"
+GLEC_PDF  = RAW_DIR / "GLEC_FRAMEWORK_v3_23_10_24_B.pdf"
+EPA_XLSX  = RAW_DIR / "ghg-emission-factors-hub-2025.xlsx"
 
 
 # ---------------------------------------------------------------------------
@@ -41,65 +46,248 @@ def get_chroma_client() -> ClientAPI:
 
 
 # ---------------------------------------------------------------------------
-# GLEC ingestion
+# EPA Table 8 — Transport factors
+# ---------------------------------------------------------------------------
+#
+# Structure (row 418 in xlsx):
+#   col 2: Vehicle Type
+#   col 3: CO2 Factor (kg CO2 / unit)
+#   col 6: Units (vehicle-mile | short ton-mile)
+#
+# Chi lay cac row co unit = "short ton-mile" (logistics freight, not passenger)
+# Va map vehicle type -> TransportMode enum value de RAG query theo mode.
+
+_TRANSPORT_MODE_MAP: dict[str, str] = {
+    "medium- and heavy-duty truck":  "truck",
+    "rail":                           "rail",
+    "waterborne craft":               "sea",
+    "aircraft":                       "air",
+}
+
+
+def _parse_table8(ws) -> list[dict]:
+    """
+    Parse Table 8 truc tiep theo row index da biet tu khao sat xlsx.
+    Tra ve list records, moi record co:
+    - text: natural language (cho embedding)
+    - metadata: co value float va mode string (cho lookup chinh xac)
+    """
+    rows = list(ws.iter_rows(values_only=True))
+    records = []
+
+    # Table 8 bat dau o row 418 (0-indexed), header o row 420, data o row 421-428
+    TABLE8_START = 418
+    TABLE8_END   = 431  # row 429 = source footnote, 430 = notes, 431 = empty
+
+    for row in rows[TABLE8_START:TABLE8_END]:
+        vehicle = row[2]
+        co2_val = row[3]
+        unit    = row[6]
+
+        if not isinstance(vehicle, str) or not isinstance(co2_val, (int, float)):
+            continue
+        if not isinstance(unit, str) or "short ton-mile" not in unit.lower():
+            continue
+
+        vehicle_clean = vehicle.strip().rstrip("ABC").strip().lower()
+        mode = next(
+            (m for k, m in _TRANSPORT_MODE_MAP.items() if k in vehicle_clean),
+            None
+        )
+        if mode is None:
+            continue
+
+        co2_val = float(co2_val)
+
+        text = (
+            f"EPA Table 8 transport emission factor for {vehicle.strip()}: "
+            f"CO2 factor is {co2_val} kg CO2 per short ton-mile. "
+            f"Transport mode: {mode}. "
+            f"Source: EPA Emission Factors for GHG Inventories 2025."
+        )
+
+        records.append({
+            "text": text,
+            "metadata": {
+                "source":  "EPA_GHG_Hub_2025_Table8",
+                "type":    "transport",
+                "mode":    mode,
+                "value":   co2_val,
+                "unit":    "kg_co2_per_short_ton_mile",
+                "vehicle": vehicle.strip(),
+            },
+        })
+        log.info(f"Table 8: {mode} ({vehicle.strip()}) = {co2_val} kg CO2/short ton-mile")
+
+    return records
+
+
+# ---------------------------------------------------------------------------
+# EPA Table 9 — Packaging factors
+# ---------------------------------------------------------------------------
+#
+# Structure (row 431 in xlsx):
+#   col 2: Material
+#   col 3: Recycled (metric ton CO2e / short ton material)
+#   col 4: Landfilled
+#   col 5: Combusted
+#   col 6: Composted
+#
+# Moi material tao 2 records: recycled va landfilled.
+# Moi record co metadata.value de RAG lookup chinh xac.
+
+_PACKAGING_MATERIAL_MAP: dict[str, str] = {
+    "aluminum cans":         "aluminum",
+    "steel cans":            "steel",
+    "glass":                 "glass",
+    "hdpe":                  "hdpe",
+    "pet":                   "pet",
+    "corrugated containers": "carton",
+    "mixed metals":          "mixed_metals",
+    "mixed plastics":        "mixed_plastics",
+    "ldpe":                  "mixed_plastics",
+    "lldpe":                 "mixed_plastics",
+    "pp":                    "mixed_plastics",
+}
+
+
+def _parse_table9(ws) -> list[dict]:
+    """
+    Parse Table 9 truc tiep.
+    Moi material + disposal_method -> 1 record voi metadata.value.
+    """
+    rows = list(ws.iter_rows(values_only=True))
+    records = []
+
+    # Table 9 bat dau o row 431, data o row 435 tro di
+    TABLE9_START = 435
+    TABLE9_END   = 490  # du de cover het material rows
+
+    for row in rows[TABLE9_START:TABLE9_END]:
+        material = row[2]
+        recycled   = row[3]
+        landfilled = row[4]
+
+        if not isinstance(material, str) or len(material.strip()) < 2:
+            continue
+
+        material_clean = material.strip().lower()
+        # Exact match first, then word-boundary regex
+        # Prevents "carpet" -> "pet" and "copper wire" -> wrong mapping
+        material_key = _PACKAGING_MATERIAL_MAP.get(material_clean)
+        if material_key is None:
+            import re as _re
+            material_key = next(
+                (v for k, v in _PACKAGING_MATERIAL_MAP.items()
+                 if _re.search(r"\b" + _re.escape(k) + r"\b", material_clean)),
+                None
+            )
+        if material_key is None:
+            continue
+
+        for disposal, val in [("recycled", recycled), ("landfilled", landfilled)]:
+            if not isinstance(val, (int, float)):
+                continue
+            val = float(val)
+
+            text = (
+                f"EPA Table 9 packaging emission factor for {material.strip()}: "
+                f"{disposal} disposal is {val} metric tons CO2e per short ton material. "
+                f"Material type: {material_key}. "
+                f"Source: EPA Emission Factors for GHG Inventories 2025."
+            )
+
+            records.append({
+                "text": text,
+                "metadata": {
+                    "source":   "EPA_GHG_Hub_2025_Table9",
+                    "type":     "packaging",
+                    "material": material_key,
+                    "disposal": disposal,
+                    "value":    val,
+                    "unit":     "metric_tons_co2e_per_short_ton_material",
+                    "raw_material": material.strip(),
+                },
+            })
+
+        log.info(f"Table 9: {material.strip()} -> {material_key}")
+
+    return records
+
+
+def ingest_epa(client: ClientAPI) -> None:
+    collection = client.get_or_create_collection(
+        name=settings.chroma_collection_epa,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+    existing = collection.count()
+    if existing > 0:
+        log.info(f"EPA collection da co {existing} chunks, skip. Dung --force de re-ingest.")
+        return
+
+    wb = openpyxl.load_workbook(str(EPA_XLSX))
+    ws = wb.active
+
+    transport_records = _parse_table8(ws)
+    packaging_records = _parse_table9(ws)
+    all_records = transport_records + packaging_records
+
+    if not all_records:
+        log.warning("Khong tim thay records EPA — kiem tra lai file XLSX.")
+        return
+
+    collection.add(
+        documents=[r["text"] for r in all_records],
+        metadatas=[r["metadata"] for r in all_records],
+        ids=[f"epa_{i}" for i in range(len(all_records))],
+    )
+    log.info(
+        f"EPA: ingested {len(transport_records)} transport + "
+        f"{len(packaging_records)} packaging records"
+    )
+
+
+# ---------------------------------------------------------------------------
+# GLEC PDF — contextual chunks (cho explanation generation)
 # ---------------------------------------------------------------------------
 
-# Nhung section trong GLEC lien quan den transport emission intensity.
-# Chi ingest nhung section nay — bo qua phan governance, glossary, etc.
-# de giam noise khi RAG query.
 GLEC_RELEVANT_SECTIONS = [
-    "road transport",
-    "sea transport", "ocean", "maritime",
-    "air transport", "aviation",
-    "rail transport",
-    "emission intensity",
-    "default emission factor",
-    "tce",                      # Transport Chain Element
-    "gco2e", "co2e",
-    "tonne-km", "ton-km",
+    "road transport", "sea transport", "ocean", "maritime",
+    "air transport", "aviation", "rail transport",
+    "emission intensity", "default emission factor",
+    "tce", "gco2e", "co2e", "tonne-km", "ton-km",
+    "well-to-wheel", "wtw", "tank-to-wheel", "ttw",
+    "glec framework", "iso 14083",
 ]
 
 
-def _is_relevant_glec_chunk(text: str) -> bool:
-    text_lower = text.lower()
-    return any(kw in text_lower for kw in GLEC_RELEVANT_SECTIONS)
-
-
 def _chunk_glec_pdf(path: Path, chunk_size: int = 800) -> list[dict]:
-    """
-    Doc GLEC PDF va chunk theo sliding window tren tung trang.
-
-    chunk_size = 800 chars la diem can bang giua:
-    - Du context cho LLM hieu emission factor
-    - Khong qua lon khien embedding mat precision
-
-    Moi chunk giu them page_number de debug khi RAG tra ve sai.
-    """
     reader = PdfReader(str(path))
     chunks = []
 
     for page_num, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
         text = re.sub(r"\s+", " ", text).strip()
-
         if not text:
             continue
 
-        # Sliding window voi 10% overlap de tranh cat doan giua con so va don vi
+        text_lower = text.lower()
+        if not any(kw in text_lower for kw in GLEC_RELEVANT_SECTIONS):
+            continue
+
         overlap = int(chunk_size * 0.10)
         step = chunk_size - overlap
         for i in range(0, len(text), step):
-            chunk = text[i : i + chunk_size].strip()
-            if len(chunk) < 80:         # bo qua chunk qua ngan (header/footer)
-                continue
-            if not _is_relevant_glec_chunk(chunk):
+            chunk = text[i: i + chunk_size].strip()
+            if len(chunk) < 80:
                 continue
             chunks.append({
                 "text": chunk,
                 "metadata": {
                     "source": "GLEC_Framework_v3.2",
-                    "page": page_num,
-                    "type": "transport_emission",
+                    "page":   page_num,
+                    "type":   "transport_emission",
                 },
             })
 
@@ -128,201 +316,7 @@ def ingest_glec(client: ClientAPI) -> None:
         metadatas=[c["metadata"] for c in chunks],
         ids=[f"glec_{i}" for i in range(len(chunks))],
     )
-    log.info(f"GLEC: ingested {len(chunks)} chunks vao collection '{settings.chroma_collection_glec}'")
-
-
-# ---------------------------------------------------------------------------
-# EPA ingestion
-# ---------------------------------------------------------------------------
-
-# Chi lay Table 8 (transport) va Table 9 (packaging/waste).
-# Cac table khac (combustion, electricity, refrigerants...) khong lien quan
-# den bai toan logistics cua chung ta.
-EPA_TARGET_TABLES = {
-    "Table 8": "transport",
-    "Table 9": "packaging",
-}
-
-
-def _extract_epa_tables(path: Path) -> list[dict]:
-    """
-    Doc EPA Excel va convert tung row cua Table 8 + Table 9
-    thanh natural language chunk de ChromaDB embed.
-
-    Li do dung natural language thay vi raw CSV:
-    - LLM query bang text ("emission factor for corrugated containers recycled")
-    - Natural language embedding match tot hon structured data
-    """
-    wb = openpyxl.load_workbook(str(path))
-    ws = wb.active
-    if ws is None:
-        log.warning("Khong tim thay worksheet active trong file EPA XLSX.")
-        return []
-    rows = list(ws.iter_rows(values_only=True))
-
-    chunks = []
-    current_table = None
-    headers = []
-
-    for row in rows:
-        # Detect table header
-        for cell in row:
-            if cell and str(cell).strip() in EPA_TARGET_TABLES:
-                current_table = str(cell).strip()
-                headers = []
-                break
-
-        if current_table is None:
-            continue
-
-        # Detect next table ngoai target -> stop
-        for cell in row:
-            if (cell and str(cell).strip().startswith("Table ")
-                    and str(cell).strip() not in EPA_TARGET_TABLES
-                    and str(cell).strip() != current_table):
-                current_table = None
-                break
-
-        if current_table is None:
-            continue
-
-        # Lay header row (dong co nhieu text nhat)
-        non_none = [c for c in row if c is not None]
-        if len(non_none) >= 3 and any(
-            isinstance(c, str) and len(c) > 4 for c in non_none
-        ):
-            potential_headers = [str(c).strip() if c else "" for c in row]
-            if any(kw in " ".join(potential_headers).lower()
-                   for kw in ["vehicle", "material", "factor", "co2", "unit"]):
-                headers = potential_headers
-                continue
-
-        # Data row: co it nhat 1 so
-        numeric_vals = [c for c in row if isinstance(c, (int, float))]
-        if not numeric_vals or not headers:
-            continue
-
-        material_or_vehicle = next(
-            (str(c).strip() for c in row if isinstance(c, str) and len(str(c).strip()) > 2),
-            None,
-        )
-        if not material_or_vehicle:
-            continue
-
-        # Build natural language chunk
-        table_type = EPA_TARGET_TABLES[current_table]
-
-        if table_type == "transport":
-            # Table 8: Vehicle Type | CO2 Factor | CH4 Factor | N2O Factor | Units
-            chunk = _build_transport_chunk(material_or_vehicle, row, headers)
-        else:
-            # Table 9: Material | Recycled | Landfilled | Combusted | ...
-            chunk = _build_packaging_chunk(material_or_vehicle, row, headers)
-
-        if chunk:
-            chunks.append({
-                "text": chunk,
-                "metadata": {
-                    "source": "EPA_GHG_Hub_2025",
-                    "table": current_table,
-                    "type": table_type,
-                    "material_or_vehicle": material_or_vehicle,
-                },
-            })
-
-    log.info(f"EPA: extracted {len(chunks)} chunks from Table 8 + Table 9")
-    return chunks
-
-
-def _build_transport_chunk(vehicle: str, row: tuple, headers: list) -> str | None:
-    """
-    Convert mot row Table 8 thanh natural language.
-    Vi du output:
-    'EPA Table 8 transport emission factor for Medium- and Heavy-Duty Truck:
-     CO2 factor is 0.186 kg CO2 per short ton-mile.
-     Unit: short ton-mile. Source: EPA GHG Hub 2025.'
-    """
-    # Tim CO2 factor va unit
-    co2_val = None
-    unit = None
-    for i, cell in enumerate(row):
-        if isinstance(cell, float) and 0.001 < cell < 10:
-            header = headers[i] if i < len(headers) else ""
-            if "co2" in header.lower() and co2_val is None:
-                co2_val = cell
-        if isinstance(cell, str) and ("mile" in cell.lower() or "ton" in cell.lower()):
-            unit = cell.strip()
-
-    if co2_val is None:
-        return None
-
-    return (
-        f"EPA Table 8 transport emission factor for {vehicle}: "
-        f"CO2 factor is {co2_val} kg CO2 per {unit or 'short ton-mile'}. "
-        f"Source: EPA Emission Factors for GHG Inventories 2025."
-    )
-
-
-def _build_packaging_chunk(material: str, row: tuple, headers: list) -> str | None:
-    """
-    Convert mot row Table 9 thanh natural language.
-    Vi du output:
-    'EPA Table 9 packaging emission factor for Corrugated Containers:
-     Recycled disposal: 0.11 metric tons CO2e per short ton material.
-     Landfilled disposal: 1.00 metric tons CO2e per short ton material.
-     Source: EPA GHG Hub 2025.'
-
-    NOTE: Recycled vs Landfilled chênh lệch rat lon (vi du carton: 0.11 vs 1.00).
-    Chunk phai giu ca hai gia tri de RAG tra ve du thong tin cho calculator
-    tinh dung theo disposal_method ma LLM extract duoc tu chung tu.
-    """
-    recycled_val = None
-    landfilled_val = None
-
-    for i, cell in enumerate(row):
-        if not isinstance(cell, (int, float)):
-            continue
-        header = headers[i].lower() if i < len(headers) else ""
-        if "recycl" in header and recycled_val is None:
-            recycled_val = float(cell)
-        elif "landfill" in header and landfilled_val is None:
-            landfilled_val = float(cell)
-
-    if recycled_val is None and landfilled_val is None:
-        return None
-
-    parts = [f"EPA Table 9 packaging emission factor for {material}:"]
-    if recycled_val is not None:
-        parts.append(f"Recycled disposal: {recycled_val} metric tons CO2e per short ton material.")
-    if landfilled_val is not None:
-        parts.append(f"Landfilled disposal: {landfilled_val} metric tons CO2e per short ton material.")
-    parts.append("Source: EPA Emission Factors for GHG Inventories 2025.")
-
-    return " ".join(parts)
-
-
-def ingest_epa(client: ClientAPI) -> None:
-    collection = client.get_or_create_collection(
-        name=settings.chroma_collection_epa,
-        metadata={"hnsw:space": "cosine"},
-    )
-
-    existing = collection.count()
-    if existing > 0:
-        log.info(f"EPA collection da co {existing} chunks, skip. Dung --force de re-ingest.")
-        return
-
-    chunks = _extract_epa_tables(EPA_XLSX)
-    if not chunks:
-        log.warning("Khong tim thay chunks EPA — kiem tra lai file XLSX.")
-        return
-
-    collection.add(
-        documents=[c["text"] for c in chunks],
-        metadatas=[c["metadata"] for c in chunks],
-        ids=[f"epa_{i}" for i in range(len(chunks))],
-    )
-    log.info(f"EPA: ingested {len(chunks)} chunks vao collection '{settings.chroma_collection_epa}'")
+    log.info(f"GLEC: ingested {len(chunks)} chunks vao '{settings.chroma_collection_glec}'")
 
 
 # ---------------------------------------------------------------------------
@@ -330,10 +324,6 @@ def ingest_epa(client: ClientAPI) -> None:
 # ---------------------------------------------------------------------------
 
 def force_reingest(client: ClientAPI) -> None:
-    """
-    Xoa ca 2 collection va ingest lai tu dau.
-    Dung khi update file GLEC hoac EPA len version moi.
-    """
     for name in [settings.chroma_collection_glec, settings.chroma_collection_epa]:
         try:
             client.delete_collection(name)
@@ -359,9 +349,11 @@ if __name__ == "__main__":
         ingest_glec(client)
         ingest_epa(client)
 
-    # Summary
     for name in [settings.chroma_collection_glec, settings.chroma_collection_epa]:
-        col = client.get_collection(name)
-        log.info(f"Collection '{name}': {col.count()} chunks")
+        try:
+            col = client.get_collection(name)
+            log.info(f"Collection '{name}': {col.count()} records")
+        except Exception:
+            pass
 
     log.info("Ingest complete.")

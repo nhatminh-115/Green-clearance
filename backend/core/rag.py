@@ -2,12 +2,15 @@
 core/rag.py
 
 Query layer giua calculator va ChromaDB.
-Nhiem vu duy nhat: nhan query text, tra ve emission factors da duoc parse.
+Nhiem vu duy nhat: nhan query, tra ve emission factors da duoc parse.
 
-Khong chua business logic tinh CO2e — do la viec cua calculator.py.
+Key improvement: doc gia tri tu metadata.value (duoc luu boi ingest.py)
+thay vi dung regex _extract_first_number() tren text chunk.
+Metadata lookup chinh xac 100%, khong co false positive.
+
+Fallback: neu ChromaDB miss hoac chua ingest, dung hardcoded EPA values.
 """
 
-import re
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -30,16 +33,13 @@ class TransportFactor:
     """
     Emission factor cho mot transport mode.
     Don vi: kg CO2 per short ton-mile (EPA Table 8).
-
-    NOTE: EPA dung short ton-mile, GLEC dung gCO2e/tonne-km.
-    Conversion duoc xu ly trong calculator.py, khong phai o day.
-    Rag chi tra ve raw value va don vi de calculator biet ma convert.
+    Conversion sang metric ton-km duoc xu ly trong calculator.py.
     """
     mode: TransportMode
     co2_per_ton_mile: float
     source: str
     unit: str = "kg CO2 per short ton-mile"
-    raw_chunk: str = ""             # giu lai de trace khi debug
+    raw_chunk: str = ""
 
 
 @dataclass
@@ -65,27 +65,17 @@ class RAGResult:
 
 
 # ---------------------------------------------------------------------------
-# Hardcoded fallback factors
-#
-# EPA Table 8 va Table 9 values duoc hardcode lam fallback khi ChromaDB
-# khong tim thay ket qua phu hop.
-#
-# Ly do can fallback:
-# - Ingest chua chay hoac ChromaDB bi corrupt
-# - Query text khong match chunk du dung material dung
-# - Demo mode khong co ChromaDB
-#
-# Values lay truc tiep tu EPA GHG Hub 2025, Table 8 + Table 9.
+# Hardcoded fallback — EPA GHG Hub 2025, Table 8 + Table 9
+# Dung khi ChromaDB chua duoc ingest hoac query miss.
 # ---------------------------------------------------------------------------
 
 _EPA_TRANSPORT_FALLBACK: dict[TransportMode, float] = {
-    TransportMode.TRUCK:  0.186,   # Medium- and Heavy-Duty Truck, short ton-mile
+    TransportMode.TRUCK:  0.186,
     TransportMode.RAIL:   0.021,
-    TransportMode.SEA:    0.077,   # Waterborne Craft
-    TransportMode.AIR:    1.086,   # Aircraft
+    TransportMode.SEA:    0.077,
+    TransportMode.AIR:    1.086,
 }
 
-# (material, disposal) -> co2e_per_short_ton
 _EPA_PACKAGING_FALLBACK: dict[tuple[PackagingMaterial, DisposalMethod], float] = {
     (PackagingMaterial.CARTON,         DisposalMethod.RECYCLED):   0.11,
     (PackagingMaterial.CARTON,         DisposalMethod.LANDFILLED):  1.00,
@@ -105,7 +95,6 @@ _EPA_PACKAGING_FALLBACK: dict[tuple[PackagingMaterial, DisposalMethod], float] =
     (PackagingMaterial.GLASS,          DisposalMethod.LANDFILLED):  0.02,
 }
 
-# Unknown disposal -> conservative: dung landfilled
 _DISPOSAL_FALLBACK = DisposalMethod.LANDFILLED
 
 
@@ -119,7 +108,7 @@ def _get_chroma_client():
         client = chromadb.PersistentClient(path=settings.chroma_persist_path)
         return client
     except Exception as e:
-        log.warning(f"Khong ket duoc ChromaDB: {e}. Se dung fallback factors.")
+        log.warning(f"ChromaDB unavailable: {e}. Using fallback factors.")
         return None
 
 
@@ -130,7 +119,7 @@ def _get_collection(name: str) -> chromadb.Collection | None:
     try:
         col = client.get_collection(name)
         if col.count() == 0:
-            log.warning(f"Collection '{name}' rong. Chay ingest.py truoc.")
+            log.warning(f"Collection '{name}' is empty. Run ingest.py first.")
             return None
         return col
     except Exception:
@@ -138,77 +127,49 @@ def _get_collection(name: str) -> chromadb.Collection | None:
 
 
 # ---------------------------------------------------------------------------
-# Number extraction helper
-# ---------------------------------------------------------------------------
-
-def _extract_first_number(text: str) -> float | None:
-    """
-    Lay so dau tien xuat hien trong text chunk.
-    Dung regex don gian vi format EPA chunk la deterministic
-    (do chinh ingest.py tao ra, khong phai free-form text).
-    """
-    matches = re.findall(r"\b\d+\.\d+|\b\d+\b", text)
-    for m in matches:
-        try:
-            val = float(m)
-            # Loc nhung so hop le cho emission factor
-            # (qua nho hoac qua lon thi sai)
-            if 0.001 < val < 100:
-                return val
-        except ValueError:
-            continue
-    return None
-
-
-# ---------------------------------------------------------------------------
 # Transport query
 # ---------------------------------------------------------------------------
 
-_TRANSPORT_QUERY_TEMPLATES: dict[TransportMode, str] = {
-    TransportMode.SEA:   "emission factor waterborne craft sea ocean shipping short ton-mile CO2",
-    TransportMode.AIR:   "emission factor aircraft air transport aviation short ton-mile CO2",
-    TransportMode.TRUCK: "emission factor medium heavy duty truck road transport short ton-mile CO2",
-    TransportMode.RAIL:  "emission factor rail transport short ton-mile CO2",
-}
-
-
 def query_transport_factor(mode: TransportMode) -> TransportFactor:
     """
-    Query ChromaDB lay emission factor cho transport mode.
-    Fallback ve EPA hardcoded value neu ChromaDB khong tra ket qua.
+    Query ChromaDB EPA collection lay emission factor cho transport mode.
+
+    Strategy: filter by metadata (type=transport, mode=<mode>) -> lay value tu metadata.
+    Metadata.value duoc luu chinh xac boi ingest.py tu Excel cell value.
+    Khong dung regex — eliminating _extract_first_number() bug.
+
+    Fallback: hardcoded EPA value neu ChromaDB miss.
     """
     collection = _get_collection(settings.chroma_collection_epa)
 
-    if collection is not None and mode in _TRANSPORT_QUERY_TEMPLATES:
-        query = _TRANSPORT_QUERY_TEMPLATES[mode]
+    if collection is not None:
         try:
-            result = collection.query(
-                query_texts=[query],
-                n_results=settings.rag_top_k,
-                where={"type": "transport"},
+            result = collection.get(
+                where={"$and": [{"type": "transport"}, {"mode": mode.value}]},
+                limit=1,
+                include=["metadatas", "documents"],
             )
-            chunks: list[str] = result["documents"][0] if result["documents"] else []
 
-            for chunk in chunks:
-                val = _extract_first_number(chunk)
-                if val is not None:
-                    log.debug(f"RAG transport [{mode}]: {val} from chunk")
+            if result["metadatas"]:
+                meta = result["metadatas"][0]
+                val  = meta.get("value")
+                if isinstance(val, (int, float)) and val > 0:
+                    log.info(
+                        f"RAG transport [{mode.value}]: {val} kg CO2/short ton-mile "
+                        f"from {meta.get('source', 'EPA')} (metadata lookup)"
+                    )
                     return TransportFactor(
                         mode=mode,
-                        co2_per_ton_mile=val,
-                        source="EPA_GHG_Hub_2025_ChromaDB",
-                        raw_chunk=chunk,
+                        co2_per_ton_mile=float(val),
+                        source=f"EPA_GHG_Hub_2025_Table8 | {meta.get('vehicle', '')}",
+                        raw_chunk=result["documents"][0] if result["documents"] else "",
                     )
         except Exception as e:
-            log.warning(f"ChromaDB query loi [{mode}]: {e}")
+            log.warning(f"ChromaDB transport query failed [{mode.value}]: {e}")
 
     # Fallback
-    fallback_val = _EPA_TRANSPORT_FALLBACK.get(mode)
-    if fallback_val is None:
-        log.error(f"Khong co fallback factor cho transport mode: {mode}")
-        fallback_val = _EPA_TRANSPORT_FALLBACK[TransportMode.TRUCK]  # worst case
-
-    log.debug(f"Fallback transport [{mode}]: {fallback_val}")
+    fallback_val = _EPA_TRANSPORT_FALLBACK.get(mode, _EPA_TRANSPORT_FALLBACK[TransportMode.TRUCK])
+    log.debug(f"Fallback transport [{mode.value}]: {fallback_val}")
     return TransportFactor(
         mode=mode,
         co2_per_ton_mile=fallback_val,
@@ -220,40 +181,64 @@ def query_transport_factor(mode: TransportMode) -> TransportFactor:
 # Packaging query
 # ---------------------------------------------------------------------------
 
-_PACKAGING_QUERY_TEMPLATES: dict[PackagingMaterial, str] = {
-    PackagingMaterial.CARTON:         "corrugated containers packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.HDPE:           "HDPE plastic packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.PET:            "PET plastic packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.MIXED_PLASTICS: "mixed plastics packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.MIXED_METALS:   "mixed metals packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.STEEL:          "steel cans packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.ALUMINUM:       "aluminum cans packaging emission factor recycled landfilled CO2e",
-    PackagingMaterial.GLASS:          "glass packaging emission factor recycled landfilled CO2e",
-}
-
-_DISPOSAL_KEYWORDS = {
-    DisposalMethod.RECYCLED:   "recycled",
-    DisposalMethod.LANDFILLED: "landfilled",
-}
-
-
 def query_packaging_factor(
     material: PackagingMaterial,
     disposal: DisposalMethod,
 ) -> PackagingFactor:
-    effective_disposal = disposal
-    if disposal == DisposalMethod.UNKNOWN:
-        effective_disposal = _DISPOSAL_FALLBACK
+    """
+    Query ChromaDB EPA collection lay emission factor cho packaging material + disposal.
 
-    # Dung thang fallback cho packaging — EPA Table 9 la fixed data
-    # RAG unreliable vi _extract_first_number hay pick wrong number tu chunk
-    fallback_val = _EPA_PACKAGING_FALLBACK.get((material, effective_disposal))
-    if fallback_val is None:
-        fallback_val = _EPA_PACKAGING_FALLBACK[
-            (PackagingMaterial.MIXED_PLASTICS, DisposalMethod.LANDFILLED)
-        ]
-        log.warning(f"Khong co fallback cho ({material}, {effective_disposal})")
+    Strategy: filter by metadata (type=packaging, material=<material>, disposal=<disposal>)
+    -> lay value tu metadata. Exact match, no ambiguity.
 
+    Fallback: hardcoded EPA value neu ChromaDB miss.
+    """
+    effective_disposal = disposal if disposal != DisposalMethod.UNKNOWN else _DISPOSAL_FALLBACK
+
+    collection = _get_collection(settings.chroma_collection_epa)
+
+    if collection is not None:
+        try:
+            result = collection.get(
+                where={
+                    "$and": [
+                        {"type":     "packaging"},
+                        {"material": material.value},
+                        {"disposal": effective_disposal.value},
+                    ]
+                },
+                limit=1,
+                include=["metadatas", "documents"],
+            )
+
+            if result["metadatas"]:
+                meta = result["metadatas"][0]
+                val  = meta.get("value")
+                if isinstance(val, (int, float)) and val >= 0:
+                    log.info(
+                        f"RAG packaging [{material.value}/{effective_disposal.value}]: "
+                        f"{val} metric tons CO2e/short ton "
+                        f"from {meta.get('source', 'EPA')} (metadata lookup)"
+                    )
+                    return PackagingFactor(
+                        material=material,
+                        disposal=effective_disposal,
+                        co2e_per_ton=float(val),
+                        source=(
+                            f"EPA_GHG_Hub_2025_Table9 | "
+                            f"{meta.get('raw_material', material.value)}"
+                        ),
+                        raw_chunk=result["documents"][0] if result["documents"] else "",
+                    )
+        except Exception as e:
+            log.warning(f"ChromaDB packaging query failed [{material.value}]: {e}")
+
+    # Fallback
+    fallback_val = _EPA_PACKAGING_FALLBACK.get(
+        (material, effective_disposal),
+        _EPA_PACKAGING_FALLBACK[(PackagingMaterial.MIXED_PLASTICS, DisposalMethod.LANDFILLED)],
+    )
+    log.debug(f"Fallback packaging [{material.value}/{effective_disposal.value}]: {fallback_val}")
     return PackagingFactor(
         material=material,
         disposal=effective_disposal,

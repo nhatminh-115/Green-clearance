@@ -97,6 +97,13 @@ Packaging weight: PL only. Disposal method: PPWR > TDS > PL.
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # fill in your keys
+
+# Build ChromaDB from EPA + GLEC source files (run once)
+python -m backend.knowledge_base.ingest
+
+# Re-ingest when EPA or GLEC files are updated to a new version
+python -m backend.knowledge_base.ingest --force
+
 uvicorn backend.main:app --reload
 ```
 
