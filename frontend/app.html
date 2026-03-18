@@ -388,6 +388,97 @@ select:focus { border-color: var(--accent); }
 .error-box { padding: 16px 20px; background: #fde8e8; border: 1px solid #f5b8b8; border-radius: 10px; font-size: 13px; color: #9b1c1c; margin-bottom: 20px; display: none; }
 .error-box.show { display: block; }
 
+
+/* History panel */
+.history-card { margin-top: 20px; }
+.history-spinner {
+  width: 20px; height: 20px; margin: 0 auto;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.history-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 0; text-align: center;
+}
+
+.history-lane-strip {
+  width: 3px; height: 36px; border-radius: 2px; flex-shrink: 0;
+}
+.history-lane-strip.green  { background: #00c896; }
+.history-lane-strip.yellow { background: #f5a623; }
+.history-lane-strip.red    { background: #e84040; }
+.history-score {
+  font-family: 'DM Mono', monospace;
+  font-size: 15px; font-weight: 600;
+  color: var(--navy); width: 38px; flex-shrink: 0; text-align: right;
+}
+.history-meta { flex: 1; min-width: 0; }
+.history-filename {
+  font-size: 11px; font-weight: 500;
+  font-family: 'DM Mono', monospace;
+  color: var(--navy);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 160px;
+}
+.history-sub {
+  font-size: 10px; color: var(--muted); margin-top: 2px;
+  display: flex; gap: 6px; align-items: center;
+}
+.history-mode-badge {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; padding: 1px 5px;
+  border-radius: 3px; background: var(--border); color: var(--muted);
+}
+.history-co2 {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--muted);
+  flex-shrink: 0; text-align: right;
+}
+.history-entry {
+  flex-direction: column; align-items: stretch;
+  padding: 0; cursor: pointer;
+}
+.history-entry-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 6px; border-radius: 6px;
+  transition: background 0.15s;
+}
+.history-entry:hover .history-entry-row { background: var(--off); }
+.history-detail {
+  display: none; padding: 0 6px 10px 17px;
+}
+.history-entry.open .history-detail { display: block; }
+.history-detail-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 11px; background: var(--off);
+  border-radius: 8px; overflow: hidden;
+}
+.history-detail-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.history-detail-table tr:last-child td { border-bottom: none; }
+.history-detail-table td:first-child {
+  color: var(--muted); font-weight: 500; width: 110px; white-space: nowrap;
+}
+.history-detail-table td:last-child {
+  font-family: 'DM Mono', monospace; color: var(--navy); word-break: break-all;
+}
+
+.history-id-copy {
+  cursor: pointer; color: var(--accent); opacity: 0.7;
+}
+.history-id-copy:hover { opacity: 1; }
+.history-refresh {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  color: var(--accent); cursor: pointer; margin-top: 12px;
+  text-transform: uppercase;
+}
+.history-refresh:hover { opacity: 0.7; }
+
 .mt16 { margin-top: 16px; }
 .mt24 { margin-top: 24px; }
 
@@ -561,6 +652,35 @@ select:focus { border-color: var(--accent); }
             Air 2t SGN→FRA ≈ 14,180 kg/t → RED 0.0
           </div>
 
+        </div>
+      </div>
+
+      <!-- Scan History -->
+      <div class="card history-card">
+        <div class="card-header" style="cursor:pointer;user-select:none" onclick="toggleHistory()">
+          <div class="card-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+            </svg>
+          </div>
+          <div class="card-title" style="flex:1">Scan History</div>
+          <svg id="historyChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" style="transition:transform 0.25s;flex-shrink:0">
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+        </div>
+        <div id="historyBody" style="display:none">
+          <div id="historyContent" style="padding:12px 16px 16px">
+            <div class="history-empty" id="historyEmpty">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--border);margin-bottom:8px">
+                <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+              </svg>
+              <div style="font-size:12px;color:var(--muted)">No scans yet</div>
+            </div>
+            <div id="historyList" style="display:none"></div>
+            <div id="historyLoading" style="display:none;text-align:center;padding:20px">
+              <div class="history-spinner"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1057,6 +1177,7 @@ function renderSingleResult(data) {
   renderFlags(data.flags || []);
 
   resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  _historyReloadHook();
 }
 
 // ---------------------------------------------------------------------------
@@ -1109,6 +1230,7 @@ function renderMultiResult(data) {
   }
 
   resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  _historyReloadHook();
 }
 
 // ---------------------------------------------------------------------------
@@ -1455,6 +1577,164 @@ function escHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// ---------------------------------------------------------------------------
+// Scan History
+// ---------------------------------------------------------------------------
+
+let historyOpen = false;
+let historyLoaded = false;
+
+function toggleHistory() {
+  historyOpen = !historyOpen;
+  document.getElementById('historyBody').style.display = historyOpen ? 'block' : 'none';
+  document.getElementById('historyChevron').style.transform = historyOpen ? 'rotate(180deg)' : '';
+
+  if (historyOpen && !historyLoaded) {
+    loadHistory();
+  }
+}
+
+async function loadHistory() {
+  const loading = document.getElementById('historyLoading');
+  const list    = document.getElementById('historyList');
+  const empty   = document.getElementById('historyEmpty');
+
+  loading.style.display = 'block';
+  list.style.display    = 'none';
+  empty.style.display   = 'none';
+
+  try {
+    const res  = await fetch(`${API}/reports?limit=10`);
+    const data = await res.json();
+
+    loading.style.display = 'none';
+
+    if (!res.ok || !Array.isArray(data) || data.length === 0) {
+      empty.style.display = 'flex';
+      historyLoaded = true;
+      return;
+    }
+
+    list.innerHTML = data.map((r, i) => {
+      const lane     = (r.lane || 'RED').toLowerCase();
+      const score    = typeof r.score === 'number' ? r.score.toFixed(1) : '—';
+      const filename = r.filename || 'unknown';
+      const mode     = r.upload_mode || 'single';
+      const co2e     = typeof r.total_co2e_kg === 'number' ? fmtCo2(r.total_co2e_kg) : '—';
+      const ts       = r.created_at ? relativeTime(r.created_at) : '';
+
+      const id      = r.id || '';
+      const origin  = r.origin_port || '—';
+      const dest    = r.destination_port || '—';
+      const tMode   = r.transport_mode || '—';
+      const dist    = r.distance_km != null ? r.distance_km + ' km' : '—';
+      const cargo   = r.cargo_weight_tons != null ? r.cargo_weight_tons + ' t' : '—';
+      const laneUp  = (r.lane || 'RED');
+
+      return `
+        <div class="history-entry" id="hentry-${i}" onclick="toggleHistoryEntry(${i})">
+          <div class="history-entry-row">
+            <div class="history-lane-strip ${lane}"></div>
+            <div class="history-score">${score}</div>
+            <div class="history-meta">
+              <div class="history-filename" title="${escHtml(filename)}">${escHtml(filename)}</div>
+              <div class="history-sub">
+                <span class="history-mode-badge">${mode}</span>
+                ${ts ? `<span>${ts}</span>` : ''}
+              </div>
+            </div>
+            <div class="history-co2">${co2e}</div>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s" class="hentry-chev-${i}">
+              <polyline points="6,9 12,15 18,9"/>
+            </svg>
+          </div>
+          <div class="history-detail">
+            <table class="history-detail-table">
+              <tr>
+                <td>ID</td>
+                <td style="display:flex;align-items:center;gap:6px">
+                  <span style="word-break:break-all">${escHtml(id)}</span>
+                  <span class="history-id-copy" onclick="copyId(event,'${escHtml(id)}')" title="Copy ID" style="flex-shrink:0">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                    </svg>
+                  </span>
+                </td>
+              </tr>
+              <tr><td>Lane</td><td><span style="font-weight:600;color:${laneUp==='GREEN'?'#0d7a4e':laneUp==='YELLOW'?'#9c6a00':'#9b1c1c'}">${laneUp}</span></td></tr>
+              <tr><td>Score</td><td>${score} / 100</td></tr>
+              <tr><td>Total CO₂e</td><td>${co2e}</td></tr>
+              <tr><td>Transport</td><td>${escHtml(tMode)}</td></tr>
+              <tr><td>Origin</td><td>${escHtml(origin)}</td></tr>
+              <tr><td>Destination</td><td>${escHtml(dest)}</td></tr>
+              <tr><td>Distance</td><td>${escHtml(dist)}</td></tr>
+              <tr><td>Cargo wt.</td><td>${escHtml(cargo)}</td></tr>
+              <tr><td>Mode</td><td>${escHtml(mode)}</td></tr>
+            </table>
+          </div>
+        </div>`;
+    }).join('');
+
+    list.style.display = 'block';
+
+    // Refresh link
+    const existing = list.nextElementSibling;
+    if (!existing || !existing.classList.contains('history-refresh')) {
+      const refreshEl = document.createElement('div');
+      refreshEl.className = 'history-refresh';
+      refreshEl.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23,4 23,11 16,11"/>
+          <path d="M20.49 15a9 9 0 11-2.12-9.36L23 11"/>
+        </svg>
+        Refresh`;
+      refreshEl.onclick = () => { historyLoaded = false; loadHistory(); };
+      list.parentNode.insertBefore(refreshEl, list.nextSibling);
+    }
+
+    historyLoaded = true;
+  } catch (err) {
+    loading.style.display = 'none';
+    empty.style.display   = 'flex';
+    empty.querySelector('div').textContent = 'Could not load history';
+    historyLoaded = false;
+  }
+}
+
+// Auto-reload history after each successful scan
+// Hook vao cuoi renderSingleResult va renderMultiResult bang cach
+// append call sau khi ham chinh chay xong — tranh override conflict.
+const _historyReloadHook = () => {
+  if (historyOpen) { historyLoaded = false; loadHistory(); }
+};
+
+function toggleHistoryEntry(i) {
+  const el = document.getElementById('hentry-' + i);
+  const chev = el.querySelector('.hentry-chev-' + i);
+  el.classList.toggle('open');
+  if (chev) chev.style.transform = el.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+
+function copyId(e, id) {
+  e.stopPropagation();
+  navigator.clipboard.writeText(id).then(() => {
+    const el = e.currentTarget;
+    el.style.color = 'var(--accent)';
+    el.title = 'Copied!';
+    setTimeout(() => { el.title = 'Copy full ID'; }, 1500);
+  });
+}
+
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60)   return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
 </script>
 </body>
 </html>

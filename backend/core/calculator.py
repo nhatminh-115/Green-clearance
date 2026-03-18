@@ -90,7 +90,7 @@ _FUEL_ASSUMPTION: dict[TransportMode, str] = {
 # ---------------------------------------------------------------------------
 
 _SCORE_GREEN_THRESHOLD  = 70.0
-_SCORE_YELLOW_THRESHOLD = 50.0
+_SCORE_YELLOW_THRESHOLD = 40.0
 _INTENSITY_BEST  = 200.0    # kg CO2e / metric ton -> score 100
 _INTENSITY_WORST = 10000.0  # kg CO2e / metric ton -> score 0
 

@@ -7,7 +7,6 @@ GET /api/v1/reports/{id}     — lay chi tiet mot report
 
 import logging
 from fastapi import APIRouter, HTTPException
-from gradio.monitoring_dashboard import data
 from supabase import create_client
 
 from backend.config import get_settings
@@ -16,8 +15,6 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 
-# Supabase client khoi tao lazy — chi tao khi co request dau tien
-# tranh loi khi Supabase chua san sang luc app start
 _supabase = None
 
 
@@ -35,16 +32,22 @@ def list_reports(limit: int = 10) -> list[dict]:
         response = (
             _get_supabase()
             .table(settings.supabase_table_reports)
-            .select("id, filename, lane, score, created_at")
+            .select(
+                "id, filename, lane, score, created_at, "
+                "total_co2e_kg, transport_co2e_kg, packaging_co2e_kg, "
+                "origin_port, destination_port, transport_mode, "
+                "distance_km, cargo_weight_tons, upload_mode, "
+                "conflict_count, files_uploaded"
+            )
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
         )
-        data: list[dict] = response.data or []  # type: ignore[assignment]
-        return data
+        rows: list[dict] = list(response.data or []) #type: ignore[assignment]
+        return rows
     except Exception as e:
         log.exception(f"Supabase list loi: {e}")
-        raise HTTPException(status_code=500, detail="Khong the lay danh sach report.")
+        raise HTTPException(status_code=500, detail="Cannot load report list.")
 
 
 @router.get("/reports/{report_id}")
@@ -60,13 +63,13 @@ def get_report(report_id: str) -> dict:
             .execute()
         )
         if not response.data:
-            raise HTTPException(status_code=404, detail="Report khong ton tai.")
-        data: dict = response.data  # type: ignore[assignment]
-        if not data:
-            raise HTTPException(status_code=404, detail="Report khong ton tai.")
-        return data
+            raise HTTPException(status_code=404, detail="Report not found.")
+        row: dict = response.data or {} #type: ignore[assignment]
+        if not row:
+            raise HTTPException(status_code=404, detail="Report not found.")
+        return row
     except HTTPException:
         raise
     except Exception as e:
         log.exception(f"Supabase get loi: {e}")
-        raise HTTPException(status_code=500, detail="Khong the lay report.")
+        raise HTTPException(status_code=500, detail="Cannot load report.")

@@ -11,10 +11,8 @@ class Settings(BaseSettings):
 
     # --- LLM ------------------------------------------------------------
     groq_api_key: str
-    gemini_api_key: str
 
     groq_model: str = "llama-3.3-70b-versatile"
-    gemini_model: str = "gemini-1.5-flash"
 
     # --- ChromaDB -------------------------------------------------------
     chroma_persist_path: str = "./backend/knowledge_base/chroma_db"
