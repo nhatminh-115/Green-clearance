@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Green Clearance — ESG Logistics Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:       #0f1e3c;
+  --navy-mid:   #1a3060;
+  --accent:     #00c896;
+  --accent-dim: rgba(0,200,150,0.12);
+  --warn:       #f5a623;
+  --danger:     #e84040;
+  --white:      #ffffff;
+  --off:        #f7f8fa;
+  --border:     #e2e6ef;
+  --text:       #1a2340;
+  --muted:      #6b7a99;
+  --card-shadow: 0 2px 16px rgba(15,30,60,0.08);
+  --radius:     12px;
+}
+
+body {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  background: var(--off);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* TOPBAR */
+.topbar {
+  background: var(--navy);
+  padding: 0 40px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-mark svg { width: 18px; height: 18px; }
+.logo-text { font-size: 18px; font-weight: 700; color: var(--white); letter-spacing: 0.3px; }
+.logo-sub { font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 1px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.4); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* LAYOUT */
+.page { max-width: 1200px; margin: 0 auto; padding: 40px 40px 80px; }
+.grid-main {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px; align-items: start;
+}
+
+/* CARD */
+.card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--card-shadow); overflow: hidden;
+}
+.card-header {
+  padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.card-header-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--accent-dim);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.card-header-icon svg { width: 16px; height: 16px; color: var(--accent); }
+.card-title { font-size: 13px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--navy); }
+.card-body { padding: 24px; }
+
+/* MODE TOGGLE */
+.mode-toggle {
+  display: flex;
+  background: var(--off);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 20px;
+  gap: 2px;
+}
+.mode-btn {
+  flex: 1; padding: 8px 12px;
+  border: none; border-radius: 6px;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  color: var(--muted); background: transparent;
+  letter-spacing: 0.3px;
+}
+.mode-btn.active {
+  background: var(--white);
+  color: var(--navy);
+  box-shadow: 0 1px 4px rgba(15,30,60,0.12);
+}
+
+/* UPLOAD ZONE */
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 32px 20px; text-align: center;
+  cursor: pointer; transition: all 0.2s;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--accent); background: var(--accent-dim);
+}
+.upload-icon {
+  width: 44px; height: 44px; margin: 0 auto 12px;
+  background: var(--navy); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.upload-icon svg { width: 22px; height: 22px; color: var(--accent); }
+.upload-label { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.upload-hint { font-size: 12px; color: var(--muted); }
+
+/* FILE LIST (multi mode) */
+.file-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.file-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  background: var(--off);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.file-row.status-processing { border-color: #c5d9f8; background: #f0f6ff; }
+.file-row.status-done { border-color: #a7e8cc; background: #f0fdf8; }
+.file-row.status-error { border-color: #f5b8b8; background: #fde8e8; }
+
+.file-row-icon { flex-shrink: 0; }
+.file-row-name {
+  flex: 1; font-size: 12px; font-weight: 500;
+  font-family: 'DM Mono', monospace;
+  color: var(--navy); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-row-size { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+.file-row-badge {
+  flex-shrink: 0; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 100px;
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.badge-pending   { background: var(--border); color: var(--muted); }
+.badge-proc      { background: #dbeafe; color: #1a5cb8; }
+.badge-ci        { background: #e0f2fe; color: #0369a1; }
+.badge-pl        { background: #f0fdf4; color: #166534; }
+.badge-bl        { background: #fef3c7; color: #92400e; }
+.badge-tds       { background: #f3e8ff; color: #6b21a8; }
+.badge-ppwr      { background: #fce7f3; color: #9d174d; }
+.badge-unknown   { background: #fde8e8; color: #9b1c1c; }
+.badge-error     { background: #fde8e8; color: #9b1c1c; }
+
+.file-row-remove {
+  flex-shrink: 0; width: 20px; height: 20px;
+  border: none; background: none; cursor: pointer;
+  color: var(--muted); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.file-row-remove:hover { color: var(--danger); background: #fde8e8; }
+
+/* SINGLE FILE INFO */
+.file-info { display: none; align-items: center; gap: 10px; padding: 12px 14px; background: var(--accent-dim); border-radius: 8px; margin-top: 12px; }
+.file-info.show { display: flex; }
+.file-info-name { font-size: 13px; font-weight: 500; color: var(--navy); font-family: 'DM Mono', monospace; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-info-size { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+.select-wrap { position: relative; margin-top: 16px; }
+.select-label { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Be Vietnam Pro', sans-serif; font-size: 13px; color: var(--text); background: var(--white); appearance: none; cursor: pointer; outline: none; transition: border-color 0.2s; }
+select:focus { border-color: var(--accent); }
+
+/* MISSING TYPES HINT */
+.missing-hint {
+  margin-top: 12px; padding: 10px 12px;
+  background: #fffbf0; border: 1px solid #f8dfa0;
+  border-radius: 8px; font-size: 12px; color: #9c6a00;
+  display: none;
+}
+.missing-hint.show { display: block; }
+.missing-hint strong { font-weight: 600; }
+
+.btn-analyze {
+  width: 100%; margin-top: 20px; padding: 14px;
+  background: var(--navy); color: var(--white);
+  border: none; border-radius: 10px;
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; display: flex;
+  align-items: center; justify-content: center; gap: 8px;
+}
+.btn-analyze:hover:not(:disabled) {
+  background: var(--navy-mid); transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(15,30,60,0.2);
+}
+.btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-analyze .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: var(--white); border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+.btn-analyze.loading .spinner { display: block; }
+.btn-analyze.loading .btn-text { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* RESULT */
+.result-panel { display: none; }
+.result-panel.show { display: block; }
+
+/* SCORE HERO */
+.score-hero {
+  border-radius: var(--radius); padding: 32px;
+  display: flex; align-items: center; gap: 32px;
+  margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.score-hero::before { content: ''; position: absolute; right: -40px; top: -40px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,0.06); }
+.score-hero.green { background: linear-gradient(135deg, #0d7a4e, #00c896); }
+.score-hero.yellow { background: linear-gradient(135deg, #9c6a00, #f5a623); }
+.score-hero.red { background: linear-gradient(135deg, #8b1a1a, #e84040); }
+.score-number { font-size: 72px; font-weight: 700; color: var(--white); line-height: 1; flex-shrink: 0; }
+.score-info { flex: 1; }
+.score-lane { font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 6px; }
+.score-label { font-size: 26px; font-weight: 600; color: var(--white); margin-bottom: 8px; line-height: 1.2; }
+.score-co2 { font-family: 'DM Mono', monospace; font-size: 13px; color: rgba(255,255,255,0.7); }
+.score-meta { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 6px; }
+
+/* CO2 BREAKDOWN */
+.co2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.co2-card { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--border); }
+.co2-card-label { font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; }
+.co2-card.transport { background: #f0f6ff; border-color: #c5d9f8; }
+.co2-card.transport .co2-card-label { color: #1a5cb8; }
+.co2-card.packaging { background: #fffbf0; border-color: #f8dfa0; }
+.co2-card.packaging .co2-card-label { color: #9c6a00; }
+.co2-card-value { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; color: var(--text); }
+.co2-card-pct { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.bar-wrap { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; display: flex; margin-bottom: 8px; }
+.bar-transport { height: 100%; background: #3b82f6; border-radius: 3px 0 0 3px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+.bar-packaging { height: 100%; background: var(--warn); transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+/* BREAKDOWN */
+.breakdown-toggle { display: none; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); cursor: pointer; margin-top: 16px; user-select: none; width: fit-content; }
+.breakdown-toggle.visible { display: flex; }
+.breakdown-toggle:hover { color: var(--navy); }
+.breakdown-toggle svg { transition: transform 0.2s; }
+.breakdown-toggle.open svg { transform: rotate(180deg); }
+.breakdown-list { display: none; margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.breakdown-list.show { display: block; }
+.breakdown-item { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.breakdown-item:last-child { border-bottom: none; }
+.breakdown-item-label { font-weight: 600; color: var(--navy); margin-bottom: 8px; font-size: 13px; }
+.breakdown-formula { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); background: var(--off); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; line-height: 1.7; white-space: pre; }
+.breakdown-result { display: flex; justify-content: space-between; align-items: center; }
+.breakdown-co2 { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--navy); }
+.breakdown-source { font-size: 10px; color: var(--muted); font-style: italic; }
+
+/* Sub-steps */
+.substep-toggle {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.6px;
+  text-transform: uppercase; color: var(--accent);
+  cursor: pointer; margin-top: 10px; user-select: none; width: fit-content;
+}
+.substep-toggle:hover { opacity: 0.75; }
+.substep-toggle svg { transition: transform 0.2s; }
+.substep-toggle.open svg { transform: rotate(180deg); }
+.substep-list { display: none; margin-top: 8px; border-left: 2px solid var(--accent-dim); padding-left: 12px; }
+.substep-list.show { display: block; }
+.substep-row { padding: 8px 0; border-bottom: 1px dashed var(--border); }
+.substep-row:last-child { border-bottom: none; }
+.substep-label { font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.substep-formula {
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted);
+  background: var(--off); border-radius: 4px; padding: 5px 8px;
+  margin-bottom: 3px; line-height: 1.6;
+}
+.substep-result { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; color: var(--navy); }
+.substep-note { font-size: 10px; color: var(--muted); margin-top: 3px; font-style: italic; line-height: 1.5; }
+
+/* EXTRACTED TABLE */
+.ext-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ext-table tr { border-bottom: 1px solid var(--border); }
+.ext-table tr:last-child { border-bottom: none; }
+.ext-table td { padding: 10px 4px; vertical-align: top; }
+.ext-table td:first-child { width: 140px; color: var(--muted); font-size: 12px; font-weight: 500; padding-right: 16px; white-space: nowrap; }
+.ext-table td:last-child { color: var(--text); font-weight: 500; }
+.conf-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; padding: 1px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+.conf-high { background: #e6f9f0; color: #0d7a4e; }
+.conf-low  { background: #fff3e0; color: #9c6a00; }
+.conf-miss { background: #fde8e8; color: #9b1c1c; }
+.source-tag { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-left: 4px; }
+
+/* PER-FILE ANALYSIS */
+.per-file-grid { display: flex; flex-direction: column; gap: 10px; }
+.per-file-item {
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.per-file-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--off);
+  cursor: pointer;
+  user-select: none;
+}
+.per-file-header:hover { background: #f0f2f6; }
+.per-file-filename { flex: 1; font-size: 13px; font-weight: 500; font-family: 'DM Mono', monospace; color: var(--navy); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.per-file-doctype { font-size: 11px; }
+.per-file-conf { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+.per-file-chevron { flex-shrink: 0; transition: transform 0.2s; color: var(--muted); }
+.per-file-item.open .per-file-chevron { transform: rotate(180deg); }
+.per-file-body { display: none; padding: 16px; border-top: 1px solid var(--border); }
+.per-file-item.open .per-file-body { display: block; }
+.per-file-error { color: var(--danger); font-size: 13px; }
+
+/* CONFLICTS */
+.conflict-list { display: flex; flex-direction: column; gap: 8px; }
+.conflict-item {
+  border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.conflict-item.critical { border-color: #f5b8b8; }
+.conflict-item.warning  { border-color: #f8dfa0; }
+.conflict-item.info     { border-color: #c5d9f8; }
+
+.conflict-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer;
+}
+.conflict-header.critical { background: #fde8e8; }
+.conflict-header.warning  { background: #fffbf0; }
+.conflict-header.info     { background: #f0f6ff; }
+.conflict-header:hover { filter: brightness(0.97); }
+
+.conflict-severity-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 100px;
+  letter-spacing: 0.8px; text-transform: uppercase; flex-shrink: 0;
+}
+.sev-critical { background: #fca5a5; color: #7f1d1d; }
+.sev-warning  { background: #fde68a; color: #78350f; }
+.sev-info     { background: #bfdbfe; color: #1e3a5f; }
+
+.conflict-field { font-size: 13px; font-weight: 600; color: var(--navy); flex: 1; font-family: 'DM Mono', monospace; }
+.conflict-resolved { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.conflict-chevron { flex-shrink: 0; transition: transform 0.2s; color: var(--muted); }
+.conflict-item.open .conflict-chevron { transform: rotate(180deg); }
+
+.conflict-body { display: none; padding: 14px 16px; border-top: 1px solid var(--border); }
+.conflict-item.open .conflict-body { display: block; }
+
+.conflict-values-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+.conflict-values-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.conflict-values-table td:first-child { color: var(--muted); font-family: 'DM Mono', monospace; width: 140px; }
+.conflict-values-table tr:last-child td { border-bottom: none; }
+.conflict-resolution-note {
+  font-size: 11px; color: var(--muted);
+  padding: 8px 10px;
+  background: var(--off); border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+
+.no-conflict { color: var(--accent); font-size: 13px; font-weight: 500; }
+
+/* EXPLANATION */
+.explanation-text { font-size: 14px; line-height: 1.75; color: #2d3a55; border-left: 3px solid var(--accent); padding-left: 16px; }
+
+/* FLAGS */
+.flags-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.flag-chip { font-family: 'DM Mono', monospace; font-size: 11px; padding: 3px 10px; border-radius: 100px; background: #fff3e0; color: #9c6a00; border: 1px solid #f8dfa0; }
+
+/* EMPTY */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; text-align: center; color: var(--muted); }
+.empty-icon { width: 64px; height: 64px; border-radius: 16px; background: var(--border); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+.empty-icon svg { width: 32px; height: 32px; color: var(--muted); }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; }
+
+/* ERROR */
+.error-box { padding: 16px 20px; background: #fde8e8; border: 1px solid #f5b8b8; border-radius: 10px; font-size: 13px; color: #9b1c1c; margin-bottom: 20px; display: none; }
+.error-box.show { display: block; }
+
+.mt16 { margin-top: 16px; }
+.mt24 { margin-top: 24px; }
+
+/* Threshold table */
+.threshold-card { margin-top: 20px; }
+.threshold-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 6px;
+}
+.threshold-row.green  { background: linear-gradient(90deg, #e8f5e9, #f9fdfb); border-left: 3px solid #00c896; }
+.threshold-row.yellow { background: linear-gradient(90deg, #fffbf0, #fdfdfb); border-left: 3px solid #f5a623; }
+.threshold-row.red    { background: linear-gradient(90deg, #fde8e8, #fdfafb); border-left: 3px solid #e84040; }
+.threshold-lane {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; width: 52px; flex-shrink: 0;
+}
+.threshold-row.green  .threshold-lane { color: #0d7a4e; }
+.threshold-row.yellow .threshold-lane { color: #9c6a00; }
+.threshold-row.red    .threshold-lane { color: #9b1c1c; }
+.threshold-score {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  font-weight: 600; color: var(--navy); width: 52px; flex-shrink: 0;
+}
+.threshold-desc { font-size: 11px; color: var(--muted); flex: 1; line-height: 1.4; }
+.threshold-intensity {
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--muted); flex-shrink: 0; text-align: right;
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Green Clearance</div>
+      <div class="logo-sub">ESG Logistics Intelligence</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot"></div>
+    API Connected
+  </div>
+</div>
+
+<div class="page">
+  <div class="grid-main">
+
+    <!-- LEFT: Upload Panel -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+          </div>
+          <div class="card-title">Upload Documents</div>
+        </div>
+        <div class="card-body">
+
+          <!-- Mode toggle -->
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="modeSingle" onclick="setMode('single')">
+              Single
+            </button>
+            <button class="mode-btn" id="modeMulti" onclick="setMode('multi')">
+              Multi-file (CI + PL + B/L)
+            </button>
+          </div>
+
+          <!-- Upload zone -->
+          <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+              </svg>
+            </div>
+            <div class="upload-label" id="uploadLabel">Drag & drop or click to select file</div>
+            <div class="upload-hint" id="uploadHint">PDF, JPG, PNG, WEBP — max 20MB</div>
+          </div>
+
+          <!-- Hidden file inputs -->
+          <input type="file" id="fileInputSingle" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">
+          <input type="file" id="fileInputMulti"  accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" multiple>
+
+          <!-- Single mode: file info -->
+          <div class="file-info" id="fileInfoSingle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
+              <polyline points="20,6 9,17 4,12"/>
+            </svg>
+            <span class="file-info-name" id="fileNameSingle"></span>
+            <span class="file-info-size" id="fileSizeSingle"></span>
+          </div>
+
+          <!-- Multi mode: file list -->
+          <div class="file-list" id="fileListMulti" style="display:none"></div>
+
+          <!-- Single mode: doc type selector -->
+          <div id="docTypeWrap" class="select-wrap">
+            <div class="select-label">Document Type</div>
+            <select id="docType">
+              <option value="invoice">Commercial Invoice</option>
+              <option value="packing_list">Packing List</option>
+              <option value="bill_of_lading">Bill of Lading</option>
+            </select>
+          </div>
+
+          <!-- Multi mode: missing types hint -->
+          <div class="missing-hint" id="missingHint"></div>
+
+          <button class="btn-analyze" id="btnAnalyze" disabled>
+            <div class="spinner"></div>
+            <span class="btn-text">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:6px">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              Analyse ESG
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Scoring threshold reference -->
+      <div class="card threshold-card">
+        <div class="card-header">
+          <div class="card-header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <div class="card-title">ESG Scoring Reference</div>
+        </div>
+        <div class="card-body" style="padding:16px">
+
+          <div style="font-size:10px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+            Score is based on <strong>CO₂e intensity</strong> (kg CO₂e / metric ton cargo),<br>
+            not total absolute CO₂e — aligned with GLEC Framework v3.2.
+          </div>
+
+          <div class="threshold-row green">
+            <div class="threshold-lane">GREEN</div>
+            <div class="threshold-score">≥ 70</div>
+            <div class="threshold-desc">ESG compliant — low emissions, efficient transport</div>
+            <div class="threshold-intensity">&lt; 3,100 kg/t</div>
+          </div>
+          <div class="threshold-row yellow">
+            <div class="threshold-lane">YELLOW</div>
+            <div class="threshold-score">40–69</div>
+            <div class="threshold-desc">Needs improvement — route or packaging optimisation possible</div>
+            <div class="threshold-intensity">3,100–6,200 kg/t</div>
+          </div>
+          <div class="threshold-row red">
+            <div class="threshold-lane">RED</div>
+            <div class="threshold-score">&lt; 40</div>
+            <div class="threshold-desc">Exceeds threshold — typically air freight or high-disposal packaging</div>
+            <div class="threshold-intensity">&gt; 6,200 kg/t</div>
+          </div>
+
+          <div style="margin-top:12px;padding:8px 10px;background:var(--off);border-radius:6px;font-size:10px;color:var(--muted);line-height:1.6">
+            <strong style="color:var(--navy)">Example:</strong>
+            Sea 50t HCM→Rotterdam ≈ 1,014 kg/t → GREEN 91.7<br>
+            Air 2t SGN→FRA ≈ 14,180 kg/t → RED 0.0
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Result Panel -->
+    <div>
+      <div class="error-box" id="errorBox"></div>
+
+      <div class="card" id="emptyState">
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <div class="empty-title">No results yet</div>
+          <div class="empty-sub">Upload logistics documents to analyse ESG score</div>
+        </div>
+      </div>
+
+      <div class="result-panel" id="resultPanel">
+
+        <!-- Score Hero -->
+        <div class="score-hero" id="scoreHero">
+          <div class="score-number" id="scoreNumber">—</div>
+          <div class="score-info">
+            <div class="score-lane" id="scoreLane"></div>
+            <div class="score-label" id="scoreLabel"></div>
+            <div class="score-co2" id="scoreCo2"></div>
+            <div class="score-meta" id="scoreMeta"></div>
+          </div>
+        </div>
+
+        <!-- CO2 Breakdown -->
+        <div class="card mt16">
+          <div class="card-header">
+            <div class="card-header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 20V10M12 20V4M6 20v-6"/>
+              </svg>
+            </div>
+            <div class="card-title">CO₂e Emissions Analysis</div>
+          </div>
+          <div class="card-body">
+            <div class="bar-wrap">
+              <div class="bar-transport" id="barTransport"></div>
+              <div class="bar-packaging" id="barPackaging"></div>
+            </div>
+            <div class="co2-grid">
+              <div class="co2-card transport">
+                <div class="co2-card-label">Transport</div>
+                <div class="co2-card-value" id="co2Transport">—</div>
+                <div class="co2-card-pct" id="pctTransport"></div>
+              </div>
+              <div class="co2-card packaging">
+                <div class="co2-card-label">Packaging</div>
+                <div class="co2-card-value" id="co2Packaging">—</div>
+                <div class="co2-card-pct" id="pctPackaging"></div>
+              </div>
+            </div>
+            <div class="breakdown-toggle" id="breakdownToggle">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6,9 12,15 18,9"/>
+              </svg>
+              View calculation details
+            </div>
+            <div class="breakdown-list" id="breakdownList"></div>
+          </div>
+        </div>
+
+        <!-- Conflicts (multi mode only) -->
+        <div class="card mt24" id="conflictsCard" style="display:none">
+          <div class="card-header">
+            <div class="card-header-icon" style="background:#fde8e8">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="card-title" id="conflictsTitle">Document Conflicts</div>
+          </div>
+          <div class="card-body">
+            <div class="conflict-list" id="conflictList"></div>
+          </div>
+        </div>
+
+        <!-- Extracted Data (merged) -->
+        <div class="card mt24">
+          <div class="card-header">
+            <div class="card-header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+            </div>
+            <div class="card-title" id="extractedTitle">Extracted Data</div>
+          </div>
+          <div class="card-body">
+            <table class="ext-table" id="extTable"></table>
+          </div>
+        </div>
+
+        <!-- Per-file analysis (multi mode only) -->
+        <div class="card mt24" id="perFileCard" style="display:none">
+          <div class="card-header">
+            <div class="card-header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            </div>
+            <div class="card-title">Per-File Analysis</div>
+          </div>
+          <div class="card-body">
+            <div class="per-file-grid" id="perFileGrid"></div>
+          </div>
+        </div>
+
+        <!-- Explanation -->
+        <div class="card mt24">
+          <div class="card-header">
+            <div class="card-header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+            </div>
+            <div class="card-title">Expert Analysis</div>
+          </div>
+          <div class="card-body">
+            <p class="explanation-text" id="explanationText"></p>
+          </div>
+        </div>
+
+        <!-- Flags -->
+        <div class="card mt24" id="flagsCard" style="display:none">
+          <div class="card-header">
+            <div class="card-header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="card-title">Fields Requiring Review</div>
+          </div>
+          <div class="card-body">
+            <div class="flags-wrap" id="flagsWrap"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000/api/v1';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let currentMode = 'single';       // 'single' | 'multi'
+let multiFiles = [];               // Array of File objects (multi mode)
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+const fileInputSingle  = document.getElementById('fileInputSingle');
+const fileInputMulti   = document.getElementById('fileInputMulti');
+const uploadZone       = document.getElementById('uploadZone');
+const fileInfoSingle   = document.getElementById('fileInfoSingle');
+const fileListMulti    = document.getElementById('fileListMulti');
+const btnAnalyze       = document.getElementById('btnAnalyze');
+const errorBox         = document.getElementById('errorBox');
+const emptyState       = document.getElementById('emptyState');
+const resultPanel      = document.getElementById('resultPanel');
+const docTypeWrap      = document.getElementById('docTypeWrap');
+const missingHint      = document.getElementById('missingHint');
+
+// ---------------------------------------------------------------------------
+// Mode management
+// ---------------------------------------------------------------------------
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeSingle').classList.toggle('active', mode === 'single');
+  document.getElementById('modeMulti').classList.toggle('active', mode === 'multi');
+
+  if (mode === 'single') {
+    document.getElementById('uploadLabel').textContent = 'Drag & drop or click to select file';
+    document.getElementById('uploadHint').textContent = 'PDF, JPG, PNG, WEBP — max 20MB';
+    docTypeWrap.style.display = 'block';
+    fileListMulti.style.display = 'none';
+    missingHint.classList.remove('show');
+    multiFiles = [];
+  } else {
+    document.getElementById('uploadLabel').textContent = 'Drag & drop or click to select multiple files';
+    document.getElementById('uploadHint').textContent = 'CI + PL + B/L + TDS/PPWR — max 6 files, 20MB each';
+    docTypeWrap.style.display = 'none';
+    fileListMulti.style.display = 'flex';
+  }
+
+  resetUploadState();
+}
+
+function resetUploadState() {
+  fileInfoSingle.classList.remove('show');
+  btnAnalyze.disabled = true;
+  multiFiles = [];
+  renderFileList();
+}
+
+// ---------------------------------------------------------------------------
+// Upload zone interaction
+// ---------------------------------------------------------------------------
+
+uploadZone.addEventListener('click', () => {
+  if (currentMode === 'single') fileInputSingle.click();
+  else fileInputMulti.click();
+});
+
+// Drag & drop
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const dropped = Array.from(e.dataTransfer.files);
+  if (!dropped.length) return;
+
+  if (currentMode === 'single') {
+    showSingleFile(dropped[0]);
+  } else {
+    addMultiFiles(dropped);
+  }
+});
+
+// Single file input
+fileInputSingle.addEventListener('change', () => {
+  const f = fileInputSingle.files[0];
+  if (f) showSingleFile(f);
+});
+
+// Multi file input
+fileInputMulti.addEventListener('change', () => {
+  addMultiFiles(Array.from(fileInputMulti.files));
+  fileInputMulti.value = '';  // Reset de co the chon lai cung file neu can
+});
+
+function showSingleFile(f) {
+  document.getElementById('fileNameSingle').textContent = f.name;
+  document.getElementById('fileSizeSingle').textContent = formatBytes(f.size);
+  fileInfoSingle.classList.add('show');
+  btnAnalyze.disabled = false;
+}
+
+function addMultiFiles(newFiles) {
+  const MAX_FILES = 6;
+  for (const f of newFiles) {
+    if (multiFiles.length >= MAX_FILES) break;
+    // Dedup theo filename
+    if (!multiFiles.find(existing => existing.name === f.name)) {
+      multiFiles.push(f);
+    }
+  }
+  renderFileList();
+  btnAnalyze.disabled = multiFiles.length === 0;
+  updateMissingHint();
+}
+
+function removeFileAt(index) {
+  multiFiles.splice(index, 1);
+  renderFileList();
+  btnAnalyze.disabled = multiFiles.length === 0;
+  updateMissingHint();
+}
+
+// ---------------------------------------------------------------------------
+// File list rendering (multi mode)
+// ---------------------------------------------------------------------------
+
+// Mapping doc_type value -> display info
+const DOC_TYPE_DISPLAY = {
+  'commercial_invoice':          { label: 'CI',   badgeClass: 'badge-ci' },
+  'packing_list':                { label: 'PL',   badgeClass: 'badge-pl' },
+  'bill_of_lading':              { label: 'B/L',  badgeClass: 'badge-bl' },
+  'technical_data_sheet':        { label: 'TDS',  badgeClass: 'badge-tds' },
+  'ppwr_doc':                    { label: 'PPWR', badgeClass: 'badge-ppwr' },
+  'unknown':                     { label: '?',    badgeClass: 'badge-unknown' },
+};
+
+function renderFileList() {
+  if (currentMode !== 'multi') return;
+
+  if (multiFiles.length === 0) {
+    fileListMulti.innerHTML = '';
+    return;
+  }
+
+  fileListMulti.innerHTML = multiFiles.map((f, i) => `
+    <div class="file-row" id="file-row-${i}">
+      <div class="file-row-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+        </svg>
+      </div>
+      <span class="file-row-name">${escHtml(f.name)}</span>
+      <span class="file-row-size">${formatBytes(f.size)}</span>
+      <span class="file-row-badge badge-pending">Pending</span>
+      <button class="file-row-remove" onclick="removeFileAt(${i})" title="Remove file">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+function updateFileRowStatus(index, status, docType) {
+  const row = document.getElementById(`file-row-${index}`);
+  if (!row) return;
+  row.className = 'file-row status-' + status;
+  const badge = row.querySelector('.file-row-badge');
+  if (!badge) return;
+
+  if (status === 'processing') {
+    badge.textContent = 'Processing...';
+    badge.className = 'file-row-badge badge-proc';
+  } else if (status === 'done' && docType) {
+    const info = DOC_TYPE_DISPLAY[docType] || { label: docType, badgeClass: 'badge-unknown' };
+    badge.textContent = info.label;
+    badge.className = 'file-row-badge ' + info.badgeClass;
+  } else if (status === 'error') {
+    badge.textContent = 'Error';
+    badge.className = 'file-row-badge badge-error';
+  }
+}
+
+// Missing document types hint
+// Transport mode doc labels — thay doi theo mode de hint dung ten chung tu
+const TRANSPORT_DOC_LABELS = {
+  sea:     'Bill of Lading (B/L)',
+  air:     'Air Waybill (AWB)',
+  truck:   'CMR Consignment Note',
+  rail:    'CIM Rail Consignment Note',
+  unknown: 'Bill of Lading / AWB',
+};
+
+const RECOMMENDED_BASE = [
+  { value: 'commercial_invoice', label: 'Commercial Invoice (CI)' },
+  { value: 'packing_list',       label: 'Packing List (PL)' },
+];
+
+// Detect transport mode tu filename array (best effort truoc khi upload)
+function guessTransportModeFromFiles(files) {
+  for (const f of files) {
+    const n = f.name.toLowerCase();
+    if (n.includes('awb') || n.includes('airway') || n.includes('air_')) return 'air';
+    if (n.includes('cmr') || n.includes('truck') || n.includes('road')) return 'truck';
+    if (n.includes('cim') || n.includes('rail')) return 'rail';
+    if (n.includes('bl_') || n.includes('b_l') || n.includes('lading') || n.includes('sea')) return 'sea';
+  }
+  return 'unknown';
+}
+
+function updateMissingHint() {
+  if (currentMode !== 'multi' || multiFiles.length === 0) {
+    missingHint.classList.remove('show');
+    return;
+  }
+
+  const transportMode = guessTransportModeFromFiles(multiFiles);
+  const blLabel = TRANSPORT_DOC_LABELS[transportMode] || TRANSPORT_DOC_LABELS.unknown;
+
+  const recommended = [
+    ...RECOMMENDED_BASE,
+    { value: 'bill_of_lading', label: blLabel },
+  ];
+
+  const present = multiFiles.map(f => guessDocTypeFromFilename(f.name));
+  const missing = recommended.filter(t => !present.includes(t.value));
+
+  if (missing.length === 0) {
+    missingHint.classList.remove('show');
+    return;
+  }
+
+  missingHint.innerHTML = `<strong>Recommended:</strong> Add ${missing.map(t => t.label).join(', ')} for more accurate results.`;
+  missingHint.classList.add('show');
+}
+
+function guessDocTypeFromFilename(name) {
+  const lower = name.toLowerCase();
+  if (lower.includes('invoice') || lower.includes('ci_') || lower.startsWith('ci')) return 'commercial_invoice';
+  if (lower.includes('packing') || lower.includes('pl_') || lower.startsWith('pl')) return 'packing_list';
+  if (lower.includes('awb') || lower.includes('airway') || lower.includes('air_waybill')) return 'bill_of_lading';
+  if (lower.includes('bl_') || lower.includes('lading') || lower.startsWith('bl')) return 'bill_of_lading';
+  if (lower.includes('tds') || lower.includes('technical')) return 'technical_data_sheet';
+  if (lower.includes('ppwr') || lower.includes('doc_')) return 'ppwr_doc';
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
+// Analyze button
+// ---------------------------------------------------------------------------
+
+btnAnalyze.addEventListener('click', async () => {
+  if (currentMode === 'single') await analyzeSingle();
+  else await analyzeMulti();
+});
+
+async function analyzeSingle() {
+  const f = fileInputSingle.files[0];
+  if (!f) return;
+
+  setLoadingState(true);
+
+  const form = new FormData();
+  form.append('file', f);
+  form.append('document_type', document.getElementById('docType').value);
+
+  try {
+    const res = await fetch(`${API}/upload`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    renderSingleResult(data);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+async function analyzeMulti() {
+  if (multiFiles.length === 0) return;
+
+  setLoadingState(true);
+
+  // Show processing state tren tat ca file rows truoc khi gui
+  multiFiles.forEach((_, i) => updateFileRowStatus(i, 'processing', null));
+
+  const form = new FormData();
+  for (const f of multiFiles) form.append('files', f);
+
+  try {
+    const res = await fetch(`${API}/upload/multi`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+    // Update file row badges dua tren per_file result
+    (data.per_file || []).forEach((fa, i) => {
+      const status = fa.error ? 'error' : 'done';
+      updateFileRowStatus(i, status, fa.doc_type);
+    });
+
+    renderMultiResult(data);
+  } catch (err) {
+    multiFiles.forEach((_, i) => updateFileRowStatus(i, 'error', null));
+    showError(err.message);
+  } finally {
+    setLoadingState(false);
+  }
+}
+
+function setLoadingState(loading) {
+  btnAnalyze.classList.toggle('loading', loading);
+  btnAnalyze.disabled = loading;
+  if (!loading) btnAnalyze.disabled = currentMode === 'single'
+    ? !fileInputSingle.files[0]
+    : multiFiles.length === 0;
+  errorBox.classList.remove('show');
+}
+
+// ---------------------------------------------------------------------------
+// Render single result
+// ---------------------------------------------------------------------------
+
+function renderSingleResult(data) {
+  const score = data.score;
+  const extracted = data.extracted;
+
+  emptyState.style.display = 'none';
+  resultPanel.classList.add('show');
+  document.getElementById('conflictsCard').style.display = 'none';
+  document.getElementById('perFileCard').style.display = 'none';
+  document.getElementById('extractedTitle').textContent = 'Extracted Data';
+
+  renderScoreHero(score, null, extracted);
+  renderCo2Breakdown(score);
+  renderBreakdown(score.calculation_steps || []);
+  renderExtractedTable(extracted, null);
+  document.getElementById('explanationText').textContent = data.explanation || '';
+  renderFlags(data.flags || []);
+
+  resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ---------------------------------------------------------------------------
+// Render multi result
+// ---------------------------------------------------------------------------
+
+function renderMultiResult(data) {
+  const score = data.score;
+  const merged = data.merged;
+  const perFile = data.per_file || [];
+  const conflicts = data.conflicts || [];
+
+  emptyState.style.display = 'none';
+  resultPanel.classList.add('show');
+  document.getElementById('extractedTitle').textContent = 'Merged Data';
+
+  // Score hero voi meta info
+  const foundTypes = (data.document_types_found || []).map(dt => {
+    const info = DOC_TYPE_DISPLAY[dt] || { label: dt };
+    return info.label;
+  });
+  const metaText = foundTypes.length > 0
+    ? `From ${perFile.length} files: ${foundTypes.join(' + ')}`
+    : '';
+
+  renderScoreHero(score, metaText, merged);
+  renderCo2Breakdown(score);
+  renderBreakdown(score.calculation_steps || []);
+  renderExtractedTable(merged, conflicts);
+  renderConflicts(conflicts);
+  renderPerFileAnalysis(perFile);
+  document.getElementById('explanationText').textContent = data.explanation || '';
+  renderFlags(data.flags || []);
+
+  // Missing types warning — dung transport mode de hien dung ten chung tu
+  const missing = data.missing_recommended_types || [];
+  if (missing.length > 0) {
+    const detectedMode = (data.merged && data.merged.transport_mode)
+      ? data.merged.transport_mode.value || 'unknown'
+      : 'unknown';
+    const blLabel = TRANSPORT_DOC_LABELS[detectedMode] || TRANSPORT_DOC_LABELS.unknown;
+
+    const labels = missing.map(dt => {
+      if (dt === 'bill_of_lading') return blLabel;
+      const info = DOC_TYPE_DISPLAY[dt] || { label: dt };
+      return info.label;
+    });
+    missingHint.innerHTML = `<strong>Missing:</strong> ${labels.join(', ')} — results may be incomplete.`;
+    missingHint.classList.add('show');
+  }
+
+  resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ---------------------------------------------------------------------------
+// Shared render functions
+// ---------------------------------------------------------------------------
+
+function renderScoreHero(score, metaText, extractedDoc) {
+  const lane = score.lane;
+  const hero = document.getElementById('scoreHero');
+  hero.className = 'score-hero ' + lane.toLowerCase();
+  document.getElementById('scoreNumber').textContent = score.score.toFixed(1);
+  document.getElementById('scoreLane').textContent = 'ESG Lane — ' + lane;
+  document.getElementById('scoreLabel').textContent = laneLabel(lane);
+  document.getElementById('scoreCo2').textContent = 'Total emissions: ' + fmtCo2(score.total_co2e_kg);
+
+  // Tinh CO2e intensity neu co cargo weight
+  let metaFull = metaText || '';
+  if (extractedDoc) {
+    const cargoTons = extractedDoc.cargo_weight_tons && extractedDoc.cargo_weight_tons.value;
+    if (cargoTons && cargoTons > 0 && score.total_co2e_kg > 0) {
+      const intensity = score.total_co2e_kg / cargoTons;
+      metaFull = (metaFull ? metaFull + '  ·  ' : '') +
+        'Intensity: ' + intensity.toFixed(0) + ' kg CO₂e / metric ton cargo';
+    }
+  }
+  document.getElementById('scoreMeta').textContent = metaFull;
+}
+
+function renderCo2Breakdown(score) {
+  const total = score.total_co2e_kg || 1;
+  const tPct = (score.transport_co2e_kg / total * 100).toFixed(1);
+  const pPct = (score.packaging_co2e_kg / total * 100).toFixed(1);
+  document.getElementById('barTransport').style.width = tPct + '%';
+  document.getElementById('barPackaging').style.width = pPct + '%';
+  document.getElementById('co2Transport').textContent = fmtCo2(score.transport_co2e_kg);
+  document.getElementById('co2Packaging').textContent = fmtCo2(score.packaging_co2e_kg);
+  document.getElementById('pctTransport').textContent = tPct + '% of total';
+  document.getElementById('pctPackaging').textContent = pPct + '% of total';
+}
+
+function renderExtractedTable(extracted, conflicts) {
+  // Build conflict lookup: field_name -> FieldConflict
+  const conflictMap = {};
+  if (conflicts) {
+    for (const c of conflicts) conflictMap[c.field_name] = c;
+  }
+
+  const rows = [
+    ['Mode',         extracted.transport_mode,   'transport_mode'],
+    ['Origin Port',  extracted.origin_port,       'origin_port'],
+    ['Dest. Port',   extracted.destination_port,  'destination_port'],
+    ['Distance',    {
+      value: extracted.distance_km.value != null ? extracted.distance_km.value + ' km' : null,
+      confidence: extracted.distance_km.confidence,
+    }, 'distance_km'],
+    ['Cargo Wt.',   {
+      value: extracted.cargo_weight_tons.value != null ? extracted.cargo_weight_tons.value + ' t' : null,
+      confidence: extracted.cargo_weight_tons.confidence,
+    }, 'cargo_weight_tons'],
+  ];
+
+  (extracted.packaging_items || []).forEach((item, i) => {
+    rows.push([
+      'Packaging ' + (i + 1),
+      { value: item.weight_tons + 't ' + item.material + ' (' + item.disposal_method + ')', confidence: item.confidence },
+      null,
+    ]);
+  });
+
+  const table = document.getElementById('extTable');
+  table.innerHTML = rows.map(([label, field, fieldKey]) => {
+    const v = field && field.value != null ? field.value : null;
+    const c = (field && field.confidence != null) ? field.confidence : 0;
+
+    let conflictIcon = '';
+    if (fieldKey && conflictMap[fieldKey]) {
+      const sev = conflictMap[fieldKey].severity;
+      const sevColor = sev === 'critical' ? '#9b1c1c' : sev === 'warning' ? '#9c6a00' : '#1a5cb8';
+      const sevBg = sev === 'critical' ? '#fde8e8' : sev === 'warning' ? '#fffbf0' : '#f0f6ff';
+      conflictIcon = `<span style="
+        font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px;
+        background:${sevBg}; color:${sevColor}; margin-left:6px;
+        font-family:'DM Mono',monospace; letter-spacing:0.5px;
+      ">${sev.toUpperCase()}</span>`;
+    }
+
+    const valHtml = v !== null
+      ? escHtml(String(v)) + `<span class="conf-badge ${c >= 0.75 ? 'conf-high' : 'conf-low'}">${(c * 100).toFixed(0)}%</span>` + conflictIcon
+      : '<span style="color:var(--danger);font-style:italic">Not found</span><span class="conf-badge conf-miss">0%</span>';
+
+    return `<tr><td>${escHtml(label)}</td><td>${valHtml}</td></tr>`;
+  }).join('');
+}
+
+function renderConflicts(conflicts) {
+  const card = document.getElementById('conflictsCard');
+  const list = document.getElementById('conflictList');
+
+  if (!conflicts || conflicts.length === 0) {
+    // Hien thi card voi "no conflict" message neu multi mode
+    if (currentMode === 'multi') {
+      card.style.display = 'block';
+      list.innerHTML = '<div class="no-conflict">No conflicts detected — all documents are consistent.</div>';
+      document.getElementById('conflictsTitle').textContent = 'Consistency Check';
+    } else {
+      card.style.display = 'none';
+    }
+    return;
+  }
+
+  card.style.display = 'block';
+
+  const critCount = conflicts.filter(c => c.severity === 'critical').length;
+  document.getElementById('conflictsTitle').textContent =
+    `Document Conflicts (${conflicts.length}${critCount > 0 ? ` — ${critCount} critical` : ''})`;
+
+  // Sort: critical first, then warning, then info
+  const sevOrder = { critical: 0, warning: 1, info: 2 };
+  const sorted = [...conflicts].sort((a, b) =>
+    (sevOrder[a.severity] || 0) - (sevOrder[b.severity] || 0)
+  );
+
+  list.innerHTML = sorted.map((c, i) => {
+    const sevClass = c.severity;
+    const sevBadgeClass = 'sev-' + c.severity;
+
+    const valRows = Object.entries(c.values_by_source).map(([fn, val]) => `
+      <tr>
+        <td>${escHtml(fn)}</td>
+        <td style="font-weight:500">${escHtml(val)}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div class="conflict-item ${sevClass}" id="conflict-${i}">
+        <div class="conflict-header ${sevClass}" onclick="toggleConflict(${i})">
+          <span class="conflict-severity-badge ${sevBadgeClass}">${c.severity}</span>
+          <span class="conflict-field">${escHtml(c.field_name)}</span>
+          <span class="conflict-resolved">→ ${escHtml(c.resolved_value || '—')}</span>
+          <svg class="conflict-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+        </div>
+        <div class="conflict-body">
+          <table class="conflict-values-table">
+            <thead>
+              <tr>
+                <td style="font-weight:600;color:var(--navy)">Document</td>
+                <td style="font-weight:600;color:var(--navy)">Value</td>
+              </tr>
+            </thead>
+            <tbody>${valRows}</tbody>
+          </table>
+          <div class="conflict-resolution-note">
+            <strong>Resolved from:</strong> ${escHtml(c.resolution_source || '—')}<br>
+            <strong>Reason:</strong> ${escHtml(c.resolution_reason)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderPerFileAnalysis(perFile) {
+  const card = document.getElementById('perFileCard');
+  const grid = document.getElementById('perFileGrid');
+
+  if (!perFile || perFile.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+
+  grid.innerHTML = perFile.map((fa, i) => {
+    const dtInfo = DOC_TYPE_DISPLAY[fa.doc_type] || { label: fa.doc_type, badgeClass: 'badge-unknown' };
+    const confPct = (fa.classification_confidence * 100).toFixed(0);
+    const method = fa.classification_method === 'heuristic' ? 'keyword match' : 'LLM';
+
+    let bodyHtml = '';
+    if (fa.error) {
+      bodyHtml = `<div class="per-file-error">Processing error: ${escHtml(fa.error)}</div>`;
+    } else if (fa.extracted) {
+      const ext = fa.extracted;
+      const miniRows = [
+        ['Mode',        ext.transport_mode],
+        ['Origin',      ext.origin_port],
+        ['Destination', ext.destination_port],
+        ['Cargo Wt.',   {
+          value: ext.cargo_weight_tons.value != null ? ext.cargo_weight_tons.value + ' t' : null,
+          confidence: ext.cargo_weight_tons.confidence,
+        }],
+      ];
+
+      const rowsHtml = miniRows.map(([label, field]) => {
+        const v = field && field.value != null ? escHtml(String(field.value)) : null;
+        const c = (field && field.confidence != null) ? field.confidence : 0;
+        const valHtml = v !== null
+          ? v + `<span class="conf-badge ${c >= 0.75 ? 'conf-high' : 'conf-low'}">${(c * 100).toFixed(0)}%</span>`
+          : '<span style="color:var(--muted);font-style:italic">N/A</span>';
+        return `<tr><td style="width:110px">${escHtml(label)}</td><td>${valHtml}</td></tr>`;
+      }).join('');
+
+      bodyHtml = `<table class="ext-table">${rowsHtml}</table>`;
+    }
+
+    return `
+      <div class="per-file-item" id="per-file-${i}">
+        <div class="per-file-header" onclick="togglePerFile(${i})">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14,2 14,8 20,8"/>
+          </svg>
+          <span class="per-file-filename">${escHtml(fa.filename)}</span>
+          <span class="per-file-doctype file-row-badge ${dtInfo.badgeClass}">${dtInfo.label}</span>
+          <span class="per-file-conf">${confPct}% · ${escHtml(method)}</span>
+          <svg class="per-file-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+        </div>
+        <div class="per-file-body">${bodyHtml}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderBreakdown(steps) {
+  const toggle = document.getElementById('breakdownToggle');
+  const list = document.getElementById('breakdownList');
+
+  if (!steps || steps.length === 0) {
+    toggle.classList.remove('visible');
+    return;
+  }
+
+  toggle.classList.add('visible');
+  toggle.classList.remove('open');
+  list.classList.remove('show');
+
+  list.innerHTML = steps.map((step, si) => {
+    const src = step.source.replace('_hardcoded','').replace('_ChromaDB','');
+    const subSteps = step.sub_steps || [];
+
+    // Sub-steps HTML
+    let subHtml = '';
+    if (subSteps.length > 0) {
+      const rows = subSteps.map(ss => `
+        <div class="substep-row">
+          <div class="substep-label">${escHtml(ss.label)}</div>
+          <div class="substep-formula">${escHtml(ss.formula)}</div>
+          <div class="substep-result">${escHtml(ss.result)}</div>
+          ${ss.note ? `<div class="substep-note">${escHtml(ss.note)}</div>` : ''}
+        </div>`).join('');
+
+      subHtml = `
+        <div class="substep-toggle" id="substep-toggle-${si}" onclick="toggleSubstep(${si})">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+          Formula breakdown (${subSteps.length} steps)
+        </div>
+        <div class="substep-list" id="substep-list-${si}">${rows}</div>`;
+    }
+
+    return `<div class="breakdown-item">
+      <div class="breakdown-item-label">${escHtml(step.label)}</div>
+      <div class="breakdown-result" style="margin-top:6px">
+        <span class="breakdown-co2">= ${fmtCo2(step.co2e_kg)}</span>
+        <span class="breakdown-source">${escHtml(src)}</span>
+      </div>
+      ${subHtml}
+    </div>`;
+  }).join('');
+}
+
+function toggleSubstep(i) {
+  document.getElementById('substep-toggle-' + i).classList.toggle('open');
+  document.getElementById('substep-list-' + i).classList.toggle('show');
+}
+
+function renderFlags(flags) {
+  const flagsCard = document.getElementById('flagsCard');
+  if (flags.length > 0) {
+    flagsCard.style.display = 'block';
+    document.getElementById('flagsWrap').innerHTML = flags.map(
+      f => `<span class="flag-chip">${escHtml(f)}</span>`
+    ).join('');
+  } else {
+    flagsCard.style.display = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Toggle helpers
+// ---------------------------------------------------------------------------
+
+document.getElementById('breakdownToggle').addEventListener('click', () => {
+  document.getElementById('breakdownToggle').classList.toggle('open');
+  document.getElementById('breakdownList').classList.toggle('show');
+});
+
+function toggleConflict(i) {
+  document.getElementById('conflict-' + i).classList.toggle('open');
+}
+
+function togglePerFile(i) {
+  document.getElementById('per-file-' + i).classList.toggle('open');
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
+function showError(msg) {
+  errorBox.textContent = 'Error: ' + msg;
+  errorBox.classList.add('show');
+}
+
+function laneLabel(lane) {
+  const map = {
+    GREEN:  'Green — ESG Compliant',
+    YELLOW: 'Yellow — Needs Improvement',
+    RED:    'Red — Exceeds Threshold',
+  };
+  return map[lane] || lane;
+}
+
+function fmtCo2(kg) {
+  if (kg >= 1000) return (kg / 1000).toFixed(2) + ' tCO2e';
+  return kg.toFixed(1) + ' kg CO2e';
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+</script>
+</body>
+</html>

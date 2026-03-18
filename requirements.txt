@@ -1,0 +1,46 @@
+# -----------------------------------------------------------------------
+# Green Clearance — requirements.txt
+# Python >= 3.11
+# -----------------------------------------------------------------------
+
+# --- API Framework ------------------------------------------------------
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0          # ASGI server chay FastAPI
+python-multipart>=0.0.9            # Can thiet de FastAPI nhan UploadFile
+searoute
+rapidfuzz
+
+# --- Data Validation ----------------------------------------------------
+pydantic>=2.7.0
+pydantic-settings>=2.2.0           # Doc .env vao config.py bang BaseSettings
+
+# --- LLM / AI -----------------------------------------------------------
+groq>=0.9.0                        # Groq API — extract structured JSON
+langgraph>=0.1.0                   # Orchestration agent
+langchain-core>=0.2.0              # Phu thuoc cua langgraph
+
+# --- RAG / Vector Store -------------------------------------------------
+chromadb>=0.5.0                    # Vector store cho GLEC + EPA knowledge base
+langchain-community>=0.2.0         # ChromaDB integration
+
+# --- Document Processing ------------------------------------------------
+pypdf>=4.2.0                       # Doc PDF text thuan
+pillow>=10.3.0                     # Xu ly anh truoc khi gui len Gemini
+openpyxl>=3.1.0                    # Doc EPA Excel (.xlsx) trong ingest.py
+
+# --- HTTP Client --------------------------------------------------------
+httpx>=0.27.0                      # Goi SeaRoutes API trong agent.py
+
+# --- Database -----------------------------------------------------------
+supabase>=2.4.0                    # Luu lich su scan va ket qua
+
+# --- Frontend -----------------------------------------------------------
+gradio>=4.36.0                     # UI dashboard
+
+# --- Dev / Testing ------------------------------------------------------
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+python-dotenv>=1.0.0               # Load .env khi chay local
+
+pdf2image 
+pillow
