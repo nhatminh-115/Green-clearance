@@ -140,15 +140,22 @@ def _classify_severity(
                 return ConflictSeverity.INFO
 
         # Strategy 2: fuzzy token overlap (e.g. "HCMC" vs "Ho Chi Minh City")
+        # CHI return INFO khi TAT CA cac cap deu similar >= 70%
+        # Neu bat ky cap nao < 70% (e.g. FRA vs LHR) -> WARNING thật sự
         try:
             from rapidfuzz import fuzz
             sorted_vals = sorted(unique_vals)
-            # So sanh tung cap, neu bat ky cap nao similar >= 70% -> INFO
+            all_pairs_similar = True
             for i in range(len(sorted_vals)):
                 for j in range(i + 1, len(sorted_vals)):
                     score = fuzz.partial_ratio(sorted_vals[i], sorted_vals[j])
-                    if score >= 70:
-                        return ConflictSeverity.INFO
+                    if score < 70:
+                        all_pairs_similar = False
+                        break
+                if not all_pairs_similar:
+                    break
+            if all_pairs_similar:
+                return ConflictSeverity.INFO
         except ImportError:
             # Fallback: token overlap
             sorted_vals = sorted(unique_vals)
@@ -159,7 +166,9 @@ def _classify_severity(
             if total_unique > 0 and overlap / total_unique >= 0.5:
                 return ConflictSeverity.INFO
 
-        return ConflictSeverity.WARNING
+        # Khac port hoan toan (khong phai khac format) -> CRITICAL
+        # Vi du: FRA vs LHR la sai du lieu, khong phai format mismatch
+        return ConflictSeverity.CRITICAL
 
     return ConflictSeverity.WARNING
 

@@ -332,10 +332,11 @@ class MultiDocumentReportResponse(BaseModel):
     per_file: list[FileAnalysis]
     merged: ExtractedDocument
     conflicts: list[FieldConflict] = Field(default_factory=list)
-    score: ESGScore
-    explanation: str
+    score: Optional[ESGScore] = None
+    explanation: str = ""
     flags: list[str] = Field(default_factory=list)
     needs_human_review: bool = False
+    halted_for_review: bool = False   # True khi co CRITICAL conflict — score khong duoc tinh
     document_types_found: list[DocumentType] = Field(default_factory=list)
     missing_recommended_types: list[DocumentType] = Field(default_factory=list)
 
@@ -348,6 +349,8 @@ class MultiDocumentReportResponse(BaseModel):
             has_critical_conflict
             or len(self.flags) > 0
         )
+        # halted_for_review: pipeline dung lai, score = None
+        # Chi set boi upload.py sau khi detect critical conflicts
         return self
 
 

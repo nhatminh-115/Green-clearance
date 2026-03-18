@@ -110,7 +110,7 @@ def _log_multi_to_supabase(
     """
     try:
         extracted = report.merged
-        score = report.score
+        score = report.score  # None khi halted_for_review
 
         critical_count = sum(
             1 for c in report.conflicts
@@ -121,11 +121,11 @@ def _log_multi_to_supabase(
             "id": report_id,
             "filename": " | ".join(filenames),
             "document_type": "multi_document",
-            "lane": score.lane.value,
-            "score": float(score.score),
-            "total_co2e_kg": float(score.total_co2e_kg),
-            "transport_co2e_kg": float(score.transport_co2e_kg),
-            "packaging_co2e_kg": float(score.packaging_co2e_kg),
+            "lane": score.lane.value if score else "HALTED",
+            "score": float(score.score) if score else None,
+            "total_co2e_kg": float(score.total_co2e_kg) if score else None,
+            "transport_co2e_kg": float(score.transport_co2e_kg) if score else None,
+            "packaging_co2e_kg": float(score.packaging_co2e_kg) if score else None,
             "origin_port": extracted.origin_port.value,
             "destination_port": extracted.destination_port.value,
             "transport_mode": extracted.transport_mode.value,
@@ -134,12 +134,13 @@ def _log_multi_to_supabase(
             "explanation": report.explanation,
             "flags": report.flags or [],
             "needs_human_review": bool(report.needs_human_review),
-            "emission_factors": dict(score.emission_factors_used),
+            "emission_factors": dict(score.emission_factors_used) if score else {},
             "upload_mode": "multi",
             "conflict_count": int(len(report.conflicts)),
             "critical_conflict_count": int(critical_count),
             "files_uploaded": int(len(filenames)),
             "document_types_found": [dt.value for dt in report.document_types_found],
+            "needs_human_review": bool(report.halted_for_review),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -320,38 +321,63 @@ async def upload_multi_document(
     # Merge documents va detect conflict
     merged_doc, conflicts = merge_documents(file_analyses)
 
-    # Tinh ESG score va generate explanation tren merged document.
-    # Dung run_pipeline_from_doc() thay vi goi calculate() + generate_explanation()
-    # rieng le de dam bao distance fill logic duoc ap dung nhat quan voi single-doc flow.
+    # Tong hop document types
+    document_types_found = list({fa.doc_type for fa in file_analyses if fa.doc_type != DocumentType.UNKNOWN})
+
+    # Human-in-the-loop: neu co CRITICAL conflict, dung pipeline.
+    # Log vao Supabase voi halted_for_review=True de giu audit trail,
+    # nhung khong tinh score — data chua du tin cay.
+    critical_conflicts = [c for c in conflicts if c.severity.value == "critical"]
+    if critical_conflicts:
+        log.warning(
+            f"CRITICAL conflicts detected ({len(critical_conflicts)} fields) — "
+            f"halting pipeline, score not calculated."
+        )
+        transport_mode_str = str(merged_doc.transport_mode.value or "unknown")
+        missing_types = identify_missing_document_types(document_types_found, transport_mode_str)
+
+        report = MultiDocumentReportResponse(
+            per_file=file_analyses,
+            merged=merged_doc,
+            conflicts=conflicts,
+            score=None,
+            explanation="",
+            flags=merged_doc.low_confidence_fields,
+            halted_for_review=True,
+            document_types_found=document_types_found,
+            missing_recommended_types=missing_types,
+        )
+
+        report_id = str(uuid.uuid4())
+        filenames = [fn for _, fn in validated]
+        _log_multi_to_supabase(report_id, filenames, report)
+        return report
+
+    # Khong co CRITICAL conflict — chay pipeline binh thuong
     from backend.core.agent import run_pipeline_from_doc
 
     try:
-        # run_pipeline_from_doc tra ve doc da duoc fill distance (neu Haversine chay duoc)
-        # Phai dung filled_doc thay vi merged_doc de UI hien dung distance_km
         filled_doc, esg_score, explanation = run_pipeline_from_doc(merged_doc)
     except Exception as e:
         log.exception(f"Pipeline (from doc) that bai: {e}")
         raise HTTPException(status_code=500, detail=f"Tinh toan ESG score that bai: {e}")
 
-    # Tong hop document types va missing types
-    document_types_found = list({fa.doc_type for fa in file_analyses if fa.doc_type != DocumentType.UNKNOWN})
     transport_mode_str = str(filled_doc.transport_mode.value or "unknown")
     missing_types = identify_missing_document_types(document_types_found, transport_mode_str)
 
     report = MultiDocumentReportResponse(
         per_file=file_analyses,
-        merged=filled_doc,           # dung filled_doc — co distance_km sau Haversine
+        merged=filled_doc,
         conflicts=conflicts,
         score=esg_score,
         explanation=explanation,
         flags=filled_doc.low_confidence_fields,
+        halted_for_review=False,
         document_types_found=document_types_found,
         missing_recommended_types=missing_types,
     )
 
-    # Log vao Supabase — non-blocking
     report_id = str(uuid.uuid4())
     filenames = [fn for _, fn in validated]
     _log_multi_to_supabase(report_id, filenames, report)
-
     return report

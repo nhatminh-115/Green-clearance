@@ -479,6 +479,36 @@ select:focus { border-color: var(--accent); }
 }
 .history-refresh:hover { opacity: 0.7; }
 
+.score-halted {
+  border-radius: var(--radius); padding: 28px 32px;
+  background: linear-gradient(135deg, #1a1a2e, #2d1b4e);
+  display: flex; align-items: center; gap: 24px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(232,64,64,0.3);
+}
+.score-halted-icon {
+  width: 52px; height: 52px; flex-shrink: 0;
+  background: rgba(232,64,64,0.15);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.score-halted-icon svg { width: 26px; height: 26px; color: #e84040; }
+.score-halted-info { flex: 1; }
+.score-halted-title {
+  font-size: 18px; font-weight: 700;
+  color: #fff; margin-bottom: 6px;
+}
+.score-halted-sub {
+  font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.5;
+}
+.score-halted-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; padding: 4px 10px;
+  border-radius: 100px; background: rgba(232,64,64,0.2);
+  color: #e84040; border: 1px solid rgba(232,64,64,0.3);
+  flex-shrink: 0;
+}
+
 .mt16 { margin-top: 16px; }
 .mt24 { margin-top: 24px; }
 
@@ -1185,16 +1215,16 @@ function renderSingleResult(data) {
 // ---------------------------------------------------------------------------
 
 function renderMultiResult(data) {
-  const score = data.score;
-  const merged = data.merged;
+  const score   = data.score;   // null khi halted_for_review
+  const merged  = data.merged;
   const perFile = data.per_file || [];
   const conflicts = data.conflicts || [];
+  const halted  = data.halted_for_review === true;
 
   emptyState.style.display = 'none';
   resultPanel.classList.add('show');
   document.getElementById('extractedTitle').textContent = 'Merged Data';
 
-  // Score hero voi meta info
   const foundTypes = (data.document_types_found || []).map(dt => {
     const info = DOC_TYPE_DISPLAY[dt] || { label: dt };
     return info.label;
@@ -1203,9 +1233,58 @@ function renderMultiResult(data) {
     ? `From ${perFile.length} files: ${foundTypes.join(' + ')}`
     : '';
 
-  renderScoreHero(score, metaText, merged);
-  renderCo2Breakdown(score);
-  renderBreakdown(score.calculation_steps || []);
+  if (halted) {
+    // HALTED — hide score + breakdown, show conflicts only
+    document.getElementById('scoreHero').style.display = 'none';
+    document.getElementById('scoreHero').nextElementSibling.style.display = 'none'; // co2 card
+
+    // Show halted banner
+    let banner = document.getElementById('haltedBanner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'haltedBanner';
+      banner.style.cssText = [
+        'background:linear-gradient(135deg,#7f1d1d,#e84040)',
+        'border-radius:12px','padding:24px 28px','margin-bottom:24px',
+        'display:flex','align-items:center','gap:16px','color:#fff'
+      ].join(';');
+      banner.innerHTML = `
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <div>
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">Halted — Human Review Required</div>
+          <div style="font-size:12px;opacity:0.8">Critical conflicts detected between documents. ESG score was not calculated. Resolve the conflicts below and re-upload with corrected documents.</div>
+        </div>`;
+      resultPanel.insertBefore(banner, resultPanel.firstChild);
+    }
+    banner.style.display = 'flex';
+
+    renderExtractedTable(merged, conflicts);
+    renderConflicts(conflicts);
+    renderPerFileAnalysis(perFile);
+    document.getElementById('explanationText').textContent = '';
+    document.getElementById(resultPanel.querySelector('.card.mt24:last-of-type')?.id || 'flagsCard').style.display = 'none';
+    renderFlags([]);
+    resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    _historyReloadHook();
+    return;
+  }
+
+  // Normal flow — hide halted banner if previously shown
+  const banner = document.getElementById('haltedBanner');
+  if (banner) banner.style.display = 'none';
+  document.getElementById('scoreHero').style.display = '';
+  document.getElementById('scoreHero').nextElementSibling.style.display = '';
+
+  if (data.halted_for_review) {
+    renderHaltedState(conflicts, perFile.length);
+  } else {
+    renderScoreHero(score, metaText, merged);
+    renderCo2Breakdown(score);
+    renderBreakdown(score.calculation_steps || []);
+  }
   renderExtractedTable(merged, conflicts);
   renderConflicts(conflicts);
   renderPerFileAnalysis(perFile);
@@ -1237,6 +1316,36 @@ function renderMultiResult(data) {
 // Shared render functions
 // ---------------------------------------------------------------------------
 
+function renderHaltedState(conflicts, fileCount) {
+  const hero = document.getElementById('scoreHero');
+  const critCount = conflicts.filter(c => c.severity === 'critical').length;
+
+  hero.className = '';
+  hero.style.cssText = '';
+  hero.innerHTML = `
+    <div class="score-halted">
+      <div class="score-halted-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="score-halted-info">
+        <div class="score-halted-title">Scoring Halted — Human Review Required</div>
+        <div class="score-halted-sub">
+          ${critCount} critical conflict${critCount > 1 ? 's' : ''} detected across ${fileCount} documents.
+          ESG score cannot be calculated until data inconsistencies are resolved.
+          Review the conflicts below, correct the source documents, and re-upload.
+        </div>
+      </div>
+      <div class="score-halted-badge">Pending Review</div>
+    </div>`;
+
+  // Hide CO2 breakdown cards
+  document.getElementById('co2Transport').closest('.card').style.display = 'none';
+}
+
 function renderScoreHero(score, metaText, extractedDoc) {
   const lane = score.lane;
   const hero = document.getElementById('scoreHero');
@@ -1260,6 +1369,9 @@ function renderScoreHero(score, metaText, extractedDoc) {
 }
 
 function renderCo2Breakdown(score) {
+  // Restore visibility in case previously hidden by halted state
+  const co2Card = document.getElementById('co2Transport').closest('.card');
+  if (co2Card) co2Card.style.display = '';
   const total = score.total_co2e_kg || 1;
   const tPct = (score.transport_co2e_kg / total * 100).toFixed(1);
   const pPct = (score.packaging_co2e_kg / total * 100).toFixed(1);

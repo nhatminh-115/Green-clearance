@@ -11,22 +11,16 @@ class Settings(BaseSettings):
 
     # --- LLM ------------------------------------------------------------
     groq_api_key: str
-
     groq_model: str = "llama-3.3-70b-versatile"
 
     # --- ChromaDB -------------------------------------------------------
     chroma_persist_path: str = "./backend/knowledge_base/chroma_db"
-
     chroma_collection_glec: str = "glec_framework"
     chroma_collection_epa: str = "epa_emission_factors"
 
     # --- RAG ------------------------------------------------------------
     rag_top_k: int = 5
-
     confidence_threshold: float = 0.75
-
-    # --- External APIs --------------------------------------------------
-    searoutes_api_key: str = ""
 
     # --- Supabase -------------------------------------------------------
     supabase_url: str
@@ -34,13 +28,11 @@ class Settings(BaseSettings):
     supabase_table_reports: str = "green_clearance_reports"
 
     # --- App ------------------------------------------------------------
-    app_env: str = "development"   # development | production
+    app_env: str = "development"
     log_level: str = "INFO"
     poppler_path: str = ""
 
-# NOTE: dung lru_cache de Settings chi duoc khoi tao mot lan
-# trong suot vong doi cua app — tranh doc .env nhieu lan.
-# Cach dung: from config import get_settings; s = get_settings()
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()  # pyright: ignore[reportCallIssue]
