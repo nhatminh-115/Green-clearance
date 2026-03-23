@@ -44,10 +44,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(report.router, prefix="/api/v1")
-
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "env": settings.app_env}
+
+# Mount thu muc frontend de serve qua HTTP (ho tro truy cap tu LAN)
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if os.path.isdir(frontend_dir):
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="frontend")
+
+@app.get("/")
+def read_root():
+    return RedirectResponse(url="/static/app.html")

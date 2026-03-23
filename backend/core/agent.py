@@ -21,7 +21,7 @@ Public API:
 
 import logging
 import time
-from typing import TypedDict, Literal
+from typing import TypedDict, Literal, Optional
 from typing_extensions import Annotated
 import operator
 
@@ -29,10 +29,11 @@ from langgraph.graph import StateGraph, START, END
 
 from backend.config import get_settings
 from backend.models.schemas import (
-    ExtractedDocument, ESGScore, FieldConfidence,
+    ExtractedDocument, ESGScore, FieldConfidence, VesselEfficiencyResult
 )
 from backend.core.calculator import calculate
 from backend.core.extractor import extract_document
+from backend.core.vessel_lookup import lookup_vessel_efficiency
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -51,6 +52,7 @@ class AgentState(TypedDict):
     # Working state
     extracted: ExtractedDocument | None
     esg_score: ESGScore | None
+    vessel_efficiency: VesselEfficiencyResult | None
     explanation: str
 
     # Control flow
@@ -548,14 +550,19 @@ def _try_fill_distance(doc: ExtractedDocument) -> ExtractedDocument:
         distance_km=FieldConfidence(value=estimated_km, confidence=confidence),
         cargo_weight_tons=doc.cargo_weight_tons,
         packaging_items=doc.packaging_items,
-        raw_text=doc.raw_text,
+        raw_text=getattr(doc, "raw_text", None),
+        vessel_name=getattr(doc, "vessel_name", None),
+        carrier_name=getattr(doc, "carrier_name", None),
+        voyage_number=getattr(doc, "voyage_number", None),
+        cargo_type=getattr(doc, "cargo_type", None),
+        routing_stops=getattr(doc, "routing_stops", []),
     )
     source = f"{len(routing_stops)}-leg AWB routing" if has_routing else f"{transport_mode} estimate"
     log.info(f"Distance filled: {estimated_km} km ({origin} -> {destination}) [{source}]")
     return updated_doc
 
 
-def generate_explanation(doc: ExtractedDocument, score: ESGScore) -> str:
+def generate_explanation(doc: ExtractedDocument, score: ESGScore, vessel_eff: Optional["VesselEfficiencyResult"] = None) -> str:
     """
     Generate ESG explanation bang ngon ngu tu nhien.
 
@@ -565,6 +572,7 @@ def generate_explanation(doc: ExtractedDocument, score: ESGScore) -> str:
     Args:
         doc: ExtractedDocument da duoc merge va resolve conflict.
         score: ESGScore da duoc tinh toan.
+        vessel_eff: Thong tin hieu nang hang tau (neu la duong bien).
 
     Returns:
         Explanation string, hoac fallback message neu Groq that bai.
@@ -581,9 +589,20 @@ def generate_explanation(doc: ExtractedDocument, score: ESGScore) -> str:
         "RED":    "RED (score < 40): shipment significantly exceeds emission thresholds.",
     }.get(score.lane.value, "")
 
+    vessel_context = ""
+    if vessel_eff and getattr(vessel_eff, "efficiency_grade", None):
+        vessel_context = f"\nAdditional Sea Freight Context:\n- Vessel Efficiency Grade: {vessel_eff.efficiency_grade} (Source: {vessel_eff.grade_source})\n- Match Confidence: {vessel_eff.confidence_level}\n"
+
+    warning_fields = []
+    if getattr(doc, "low_confidence_fields", None):
+        warning_fields = doc.low_confidence_fields
+    warning_context = ""
+    if warning_fields:
+        warning_context = f"\nData Quality Warning: The following extracted fields had low confidence or were entirely estimated/missing: {', '.join(warning_fields)}.\n"
+
     prompt = f"""
 You are a sustainability analyst writing a brief ESG report for a logistics shipment.
-Write 3-4 sentences in clear, non-technical language.
+Write 3-4 sentences in clear, non-technical language. Do NOT use bullet points.
 
 Shipment data:
 - Transport mode: {doc.transport_mode.value}
@@ -592,7 +611,7 @@ Shipment data:
 - Distance: {doc.distance_km.value} km
 - Cargo weight: {doc.cargo_weight_tons.value} metric tons
 - Packaging items: {[f"{p.weight_tons}t {p.material.value} ({p.disposal_method.value})" for p in doc.packaging_items]}
-
+{vessel_context}{warning_context}
 ESG Results:
 - Transport CO2e: {score.transport_co2e_kg:.1f} kg
 - Packaging CO2e: {score.packaging_co2e_kg:.1f} kg
@@ -605,14 +624,14 @@ Scoring methodology (GLEC-aligned):
 - Score is based on CO2e intensity (kg CO2e / metric ton cargo), NOT total CO2e.
 - Best practice threshold: 200 kg/ton = score 100
 - Worst case threshold: 10,000 kg/ton = score 0
-- Air freight typically emits 50-80x more per ton-km than sea freight,
-  so even a small air shipment can score RED while a large sea shipment scores GREEN.
+- Air freight typically emits 50-80x more per ton-km than sea freight.
 
 Explain:
 1. What the score and lane mean for this specific shipment — mention the intensity ({intensity} kg/ton)
    and why it leads to this lane (compare to thresholds if RED or YELLOW).
 2. The single biggest emission driver (transport mode + distance, or packaging disposal).
-3. One concrete, specific action to reduce emissions for this route/cargo type.
+{"3. Specifically comment on the Vessel Efficiency Grade and how the chosen carrier performed." if vessel_context else ""}
+{"4. Mention the data quality warning and how providing actual data (instead of estimations) would make the score more precise." if warning_context else "3. One concrete, specific action to reduce emissions for this route/cargo type."}
 Be direct and quantitative where possible. Do not use bullet points. Write in English.
 """
 
@@ -675,6 +694,35 @@ def node_fill_distance(state: AgentState) -> dict:
     return {"extracted": updated_doc}
 
 
+def node_lookup_vessel(state: AgentState) -> dict:
+    """Node 3.5: Thu lookup vessel efficiency neu mode la sea."""
+    doc = state["extracted"]
+    if doc is None or str(doc.transport_mode.value).lower() != "sea":
+        return {}
+
+    vessel_name_field = getattr(doc, "vessel_name", None)
+    carrier_name_field = getattr(doc, "carrier_name", None)
+    voyage_no_field = getattr(doc, "voyage_number", None)
+    cargo_type_field = getattr(doc, "cargo_type", None)
+
+    v_name = str(vessel_name_field.value).strip() if vessel_name_field and vessel_name_field.value else None
+    if not v_name or v_name.lower() in ("none", "null", "unknown", ""):
+        return {}
+
+    c_name = str(carrier_name_field.value).strip() if carrier_name_field and carrier_name_field.value else None
+    v_no = str(voyage_no_field.value).strip() if voyage_no_field and voyage_no_field.value else None
+    c_type = str(cargo_type_field.value).strip() if cargo_type_field and cargo_type_field.value else None
+
+    # Goi vessel lookup logic
+    eff_result = lookup_vessel_efficiency(
+        vessel_name=v_name,
+        carrier_name=c_name if c_name and c_name.lower() not in ("none", "null", "unknown") else None,
+        voyage_number=v_no if v_no and v_no.lower() not in ("none", "null", "unknown") else None,
+        cargo_type=c_type if c_type and c_type.lower() not in ("none", "null", "unknown") else None,
+    )
+    return {"vessel_efficiency": eff_result}
+
+
 def node_calculate(state: AgentState) -> dict:
     """Node 4: Tinh CO2e va ESG score."""
     doc = state["extracted"]
@@ -693,7 +741,7 @@ def node_explain(state: AgentState) -> dict:
     if doc is None or score is None:
         return {"explanation": "Khong the tao giai thich do thieu du lieu."}
 
-    explanation = generate_explanation(doc, score)
+    explanation = generate_explanation(doc, score, state.get("vessel_efficiency"))
     return {"explanation": explanation}
 
 
@@ -729,6 +777,7 @@ def _build_graph() -> StateGraph:
     graph.add_node("extract",       node_extract)
     graph.add_node("check_missing", node_check_missing)
     graph.add_node("fill_distance", node_fill_distance)
+    graph.add_node("lookup_vessel", node_lookup_vessel)
     graph.add_node("calculate",     node_calculate)
     graph.add_node("explain",       node_explain)
 
@@ -740,11 +789,12 @@ def _build_graph() -> StateGraph:
         should_fill_distance,
         {
             "fill_distance": "fill_distance",
-            "calculate":     "calculate",
+            "calculate":     "lookup_vessel",
         },
     )
 
-    graph.add_edge("fill_distance", "calculate")
+    graph.add_edge("fill_distance", "lookup_vessel")
+    graph.add_edge("lookup_vessel", "calculate")
     graph.add_edge("calculate",     "explain")
     graph.add_edge("explain",       END)
 
@@ -774,6 +824,7 @@ def run_pipeline(
         "document_type": document_type,
         "extracted": None,
         "esg_score": None,
+        "vessel_efficiency": None,
         "explanation": "",
         "missing_fields": [],
         "retry_count": 0,
@@ -784,18 +835,19 @@ def run_pipeline(
 
 def run_pipeline_from_doc(
     extracted_doc: ExtractedDocument,
-) -> tuple[ExtractedDocument, ESGScore, str]:
+) -> tuple[ExtractedDocument, ESGScore, Optional[VesselEfficiencyResult], str]:
     """
     Multi-document flow. Goi tu POST /api/v1/upload/multi sau khi merge.
     Skip extract node — nhan ExtractedDocument da merge san.
 
     Flow:
         1. Attempt fill distance_km neu null (Haversine, same logic as graph)
-        2. Calculate ESG score
-        3. Generate explanation
+        2. Lookup vessel efficiency (neu sea)
+        3. Calculate ESG score
+        4. Generate explanation
 
     Returns:
-        (doc_after_fill, ESGScore, explanation_str)
+        (doc_after_fill, ESGScore, VesselEfficiencyResult | None, explanation_str)
         doc_after_fill: ExtractedDocument co the da duoc patch distance_km —
         caller phai dung doc nay thay vi merged_doc goc de UI hien dung distance.
 
@@ -823,7 +875,18 @@ def run_pipeline_from_doc(
                 "calculator se tinh voi distance = 0."
             )
 
-    score = calculate(doc)
-    explanation = generate_explanation(doc, score)
+    # Lookup vessel efficiency neu transport mode la sea
+    vessel_eff = None
+    if doc.transport_mode and doc.transport_mode.value and str(doc.transport_mode.value).lower() == "sea":
+        from backend.core.vessel_lookup import lookup_vessel_efficiency
+        vessel_eff = lookup_vessel_efficiency(
+            vessel_name=getattr(doc.vessel_name, "value", None) if getattr(doc, "vessel_name", None) else None,
+            carrier_name=getattr(doc.carrier_name, "value", None) if getattr(doc, "carrier_name", None) else None,
+            voyage_number=getattr(doc.voyage_number, "value", None) if getattr(doc, "voyage_number", None) else None,
+            cargo_type=getattr(doc.cargo_type, "value", None) if getattr(doc, "cargo_type", None) else None,
+        )
 
-    return doc, score, explanation
+    score = calculate(doc)
+    explanation = generate_explanation(doc, score, vessel_eff)
+
+    return doc, score, vessel_eff, explanation

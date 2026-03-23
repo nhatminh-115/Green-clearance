@@ -1,0 +1,20 @@
+{
+  "V.025N": {
+    "imo_number": null,
+    "vessel_name_matched": "MSC CORUNA",
+    "confidence_level": "low",
+    "efficiency_grade": "C",
+    "emission_intensity_g_per_tonne_nm": null,
+    "grade_source": "glec_eedi_estimate",
+    "percentile_in_ship_type": null
+  },
+  "Clean": {
+    "imo_number": 9480215,
+    "vessel_name_matched": "MSC CORUNA",
+    "confidence_level": "medium",
+    "efficiency_grade": "B",
+    "emission_intensity_g_per_tonne_nm": 13.51,
+    "grade_source": "eu_mrv_actual",
+    "percentile_in_ship_type": 36.122244488977955
+  }
+}

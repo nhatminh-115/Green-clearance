@@ -33,6 +33,10 @@ _SCALAR_FIELDS = [
     "destination_port",
     "distance_km",
     "cargo_weight_tons",
+    "vessel_name",
+    "carrier_name",
+    "voyage_number",
+    "cargo_type",
 ]
 
 # Field-specific priority override.
@@ -169,6 +173,31 @@ def _classify_severity(
         # Khac port hoan toan (khong phai khac format) -> CRITICAL
         # Vi du: FRA vs LHR la sai du lieu, khong phai format mismatch
         return ConflictSeverity.CRITICAL
+
+    # Cho cac string field khac nhu vessel_name, voyage_number, carrier_name
+    # Ap dung fuzzy matching don gian de drop xuong INFO neu la substring hoac rat giong
+    if field_name in {"vessel_name", "voyage_number", "carrier_name"}:
+        unique_vals = {v.lower().strip() for _, v, _ in non_null if v}
+        if len(unique_vals) <= 1:
+            return ConflictSeverity.INFO
+        
+        try:
+            from rapidfuzz import fuzz
+            sorted_vals = sorted(unique_vals)
+            all_pairs_similar = True
+            for i in range(len(sorted_vals)):
+                for j in range(i + 1, len(sorted_vals)):
+                    # partial_ratio = 100 neu chuoi nay chua chuoi kia
+                    score = fuzz.partial_ratio(sorted_vals[i], sorted_vals[j])
+                    if score < 80:
+                        all_pairs_similar = False
+                        break
+                if not all_pairs_similar:
+                    break
+            if all_pairs_similar:
+                return ConflictSeverity.INFO
+        except ImportError:
+            pass
 
     return ConflictSeverity.WARNING
 
@@ -477,6 +506,10 @@ def merge_documents(
         destination_port=resolved_fields["destination_port"],
         distance_km=resolved_fields["distance_km"],
         cargo_weight_tons=resolved_fields["cargo_weight_tons"],
+        vessel_name=resolved_fields["vessel_name"],
+        carrier_name=resolved_fields["carrier_name"],
+        voyage_number=resolved_fields["voyage_number"],
+        cargo_type=resolved_fields["cargo_type"],
         packaging_items=merged_packaging,
         routing_stops=merged_routing,
     )
@@ -532,5 +565,9 @@ def _empty_document() -> ExtractedDocument:
         destination_port=null_field,
         distance_km=null_field,
         cargo_weight_tons=null_field,
+        vessel_name=null_field,
+        carrier_name=null_field,
+        voyage_number=null_field,
+        cargo_type=null_field,
         packaging_items=[],
     )

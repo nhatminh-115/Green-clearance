@@ -27,6 +27,7 @@ langchain-community>=0.2.0         # ChromaDB integration
 pypdf>=4.2.0                       # Doc PDF text thuan
 pillow>=10.3.0                     # Xu ly anh truoc khi gui len Gemini
 openpyxl>=3.1.0                    # Doc EPA Excel (.xlsx) trong ingest.py
+pandas>=2.0.0                      # Xu ly dataset EU MRV
 
 # --- HTTP Client --------------------------------------------------------
 httpx>=0.27.0                      # Goi SeaRoutes API trong agent.py

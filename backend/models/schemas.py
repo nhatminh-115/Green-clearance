@@ -113,6 +113,12 @@ class ExtractedDocument(BaseModel):
     # Neu LLM khong tim thay, de list rong — calculator se flag "packaging_missing".
     packaging_items: list[PackagingItem] = Field(default_factory=list)
 
+    # Vessel details for sea transport efficiency scoring
+    vessel_name: Optional[FieldConfidence] = None
+    carrier_name: Optional[FieldConfidence] = None
+    voyage_number: Optional[FieldConfidence] = None
+    cargo_type: Optional[FieldConfidence] = None
+
     # routing_stops: danh sach cac diem trung chuyen trich xuat tu AWB.
     # Vi du: ["SGN", "HKG", "FRA"] cho route SGN -> HKG -> FRA.
     # Neu chi co origin va destination (direct flight/sea), list se rong.
@@ -223,12 +229,27 @@ class ESGScore(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Vessel Efficiency
+# ---------------------------------------------------------------------------
+
+class VesselEfficiencyResult(BaseModel):
+    imo_number: Optional[int] = None
+    vessel_name_matched: str
+    confidence_level: str  # high, medium, low, none
+    efficiency_grade: Optional[str] = None  # A, B, C, D, E
+    emission_intensity_g_per_tonne_nm: Optional[float] = None
+    grade_source: str  # eu_mrv_actual, glec_eedi_estimate, no_data
+    percentile_in_ship_type: Optional[float] = None
+
+
+# ---------------------------------------------------------------------------
 # Report Response (single document)
 # ---------------------------------------------------------------------------
 
 class ReportResponse(BaseModel):
     extracted: ExtractedDocument
     score: ESGScore
+    vessel_efficiency: Optional[VesselEfficiencyResult] = None
     explanation: str
     flags: list[str] = Field(default_factory=list)
     needs_human_review: bool = False
@@ -333,6 +354,7 @@ class MultiDocumentReportResponse(BaseModel):
     merged: ExtractedDocument
     conflicts: list[FieldConflict] = Field(default_factory=list)
     score: Optional[ESGScore] = None
+    vessel_efficiency: Optional[VesselEfficiencyResult] = None
     explanation: str = ""
     flags: list[str] = Field(default_factory=list)
     needs_human_review: bool = False

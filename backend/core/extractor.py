@@ -467,6 +467,10 @@ _BASE_TRANSPORT_SCHEMA = """
   "destination_port": {"value": "string or null", "confidence": 0.0-1.0},
   "distance_km": {"value": number or null, "confidence": 0.0-1.0},
   "cargo_weight_tons": {"value": number or null, "confidence": 0.0-1.0},
+  "vessel_name": {"value": "string or null", "confidence": 0.0-1.0},
+  "carrier_name": {"value": "string or null", "confidence": 0.0-1.0},
+  "voyage_number": {"value": "string or null", "confidence": 0.0-1.0},
+  "cargo_type": {"value": "string or null", "confidence": 0.0-1.0},
   "packaging_items": []
 }"""
 
@@ -506,6 +510,10 @@ Output schema:
   "destination_port": {{"value": "string or null", "confidence": 0.0-1.0}},
   "distance_km": {{"value": number or null, "confidence": 0.0-1.0}},
   "cargo_weight_tons": {{"value": number or null, "confidence": 0.0-1.0}},
+  "vessel_name": {{"value": "string or null", "confidence": 0.0-1.0}},
+  "carrier_name": {{"value": "string or null", "confidence": 0.0-1.0}},
+  "voyage_number": {{"value": "string or null", "confidence": 0.0-1.0}},
+  "cargo_type": {{"value": "string or null", "confidence": 0.0-1.0}},
   "routing_stops": ["IATA_CODE_1", "IATA_CODE_2", "..."],
   "packaging_items": []
 }}
@@ -799,6 +807,10 @@ def _map_to_schema(parsed: dict) -> ExtractedDocument:
         destination_port=_safe_field(parsed, "destination_port"),
         distance_km=_safe_field(parsed, "distance_km"),
         cargo_weight_tons=_safe_field(parsed, "cargo_weight_tons"),
+        vessel_name=_safe_field(parsed, "vessel_name"),
+        carrier_name=_safe_field(parsed, "carrier_name"),
+        voyage_number=_safe_field(parsed, "voyage_number"),
+        cargo_type=_safe_field(parsed, "cargo_type"),
         packaging_items=_safe_packaging_items(parsed.get("packaging_items", [])),
         routing_stops=routing_stops,
     )

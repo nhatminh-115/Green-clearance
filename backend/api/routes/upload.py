@@ -204,6 +204,7 @@ def upload_document(
 
     extracted = state.get("extracted")
     esg_score = state.get("esg_score")
+    vessel_eff = state.get("vessel_efficiency")
     explanation = state.get("explanation", "")
 
     if extracted is None or esg_score is None:
@@ -215,6 +216,7 @@ def upload_document(
     report = ReportResponse(
         extracted=extracted,
         score=esg_score,
+        vessel_efficiency=vessel_eff,
         explanation=explanation,
     )
 
@@ -341,6 +343,7 @@ async def upload_multi_document(
             merged=merged_doc,
             conflicts=conflicts,
             score=None,
+            vessel_efficiency=None,
             explanation="",
             flags=merged_doc.low_confidence_fields,
             halted_for_review=True,
@@ -357,7 +360,7 @@ async def upload_multi_document(
     from backend.core.agent import run_pipeline_from_doc
 
     try:
-        filled_doc, esg_score, explanation = run_pipeline_from_doc(merged_doc)
+        filled_doc, esg_score, vessel_eff, explanation = run_pipeline_from_doc(merged_doc)
     except Exception as e:
         log.exception(f"Pipeline (from doc) that bai: {e}")
         raise HTTPException(status_code=500, detail=f"Tinh toan ESG score that bai: {e}")
@@ -370,6 +373,7 @@ async def upload_multi_document(
         merged=filled_doc,
         conflicts=conflicts,
         score=esg_score,
+        vessel_efficiency=vessel_eff,
         explanation=explanation,
         flags=filled_doc.low_confidence_fields,
         halted_for_review=False,
