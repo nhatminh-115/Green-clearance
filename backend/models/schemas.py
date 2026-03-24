@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from enum import Enum
-
+from backend.core.aircraft_lookup import AircraftEmissionResult
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -102,51 +102,23 @@ class ExtractedDocument(BaseModel):
     transport_mode: FieldConfidence
     origin_port: FieldConfidence
     destination_port: FieldConfidence
-
-    # distance_km co the null neu chung tu khong ghi ro.
-    # LangGraph agent se goi SeaRoutes API neu null.
     distance_km: FieldConfidence
-
     cargo_weight_tons: FieldConfidence
-
-    # Packaging la list vi mot lo hang thuong dung nhieu loai vat lieu.
-    # Neu LLM khong tim thay, de list rong — calculator se flag "packaging_missing".
     packaging_items: list[PackagingItem] = Field(default_factory=list)
-
-    # Vessel details for sea transport efficiency scoring
     vessel_name: Optional[FieldConfidence] = None
     carrier_name: Optional[FieldConfidence] = None
     voyage_number: Optional[FieldConfidence] = None
     cargo_type: Optional[FieldConfidence] = None
-
-    # routing_stops: danh sach cac diem trung chuyen trich xuat tu AWB.
-    # Vi du: ["SGN", "HKG", "FRA"] cho route SGN -> HKG -> FRA.
-    # Neu chi co origin va destination (direct flight/sea), list se rong.
-    # Agent se dung list nay de tinh tong distance theo tung leg thay vi
-    # great-circle thang tu origin -> destination.
     routing_stops: list[str] = Field(default_factory=list)
-
     raw_text: Optional[str] = None
+    source_document_type: Optional[str] = None
+
 
     @model_validator(mode="after")
     def collect_flags(self) -> "ExtractedDocument":
-        """
-        Flag logic:
-        - value = null: luon flag — data thieu, pipeline khong the tinh duoc
-        - value co nhung confidence < 0.75: flag de warn user data co the sai
-        - Ngoai le: distance_km duoc estimate tu Haversine (confidence=0.60) —
-          da co value roi, chi warn qua score_meta tren UI, khong flag
-          vi flag se confuse user (hien "Khong tim thay" nhung thuc ra da co)
-        """
         threshold = 0.75
-
-        # Fields luon flag khi null hoac confidence thap
         strict_fields = ["transport_mode", "origin_port", "destination_port", "cargo_weight_tons"]
-
-        # Fields chi flag khi NULL — neu co value thi chap nhan du confidence thap
-        # (Haversine estimate co confidence 0.60 nhung van co gia tri su dung duoc)
         null_only_fields = ["distance_km"]
-
         flags = []
 
         for f in strict_fields:
@@ -164,8 +136,14 @@ class ExtractedDocument(BaseModel):
                 flags.append(f"packaging_items[{i}]")
             if item.disposal_method == DisposalMethod.UNKNOWN:
                 flags.append(f"packaging_items[{i}].disposal_method")
+
+        # Chi flag packaging_items_missing khi doc type co the co packaging.
+        # BL va CI khong bao gio co packaging data theo thiet ke cua extractor —
+        # flag cho cac doc nay la misleading va khien needs_human_review = True sai.
+        _NO_PACKAGING_TYPES = {"bill_of_lading", "commercial_invoice"}
         if not self.packaging_items:
-            flags.append("packaging_items_missing")
+            if self.source_document_type not in _NO_PACKAGING_TYPES:
+                flags.append("packaging_items_missing")
 
         self.low_confidence_fields = flags
         return self
@@ -238,8 +216,23 @@ class VesselEfficiencyResult(BaseModel):
     confidence_level: str  # high, medium, low, none
     efficiency_grade: Optional[str] = None  # A, B, C, D, E
     emission_intensity_g_per_tonne_nm: Optional[float] = None
-    grade_source: str  # eu_mrv_actual, glec_eedi_estimate, no_data
+    grade_source: str  #eu_mrv_actual, industry_average, no_data
     percentile_in_ship_type: Optional[float] = None
+
+
+# ---------------------------------------------------------------------------
+# Aircraft Efficiency
+# ---------------------------------------------------------------------------
+
+class AircraftEfficiencyResult(BaseModel):
+    """Result of ICAO/CORSIA aircraft efficiency lookup."""
+    aircraft_type_matched: Optional[str] = None      # e.g. 'Boeing 777-300ER'
+    airline_matched: Optional[str] = None             # e.g. 'Vietnam Airlines'
+    confidence_level: str = "none"                    # high, medium, low, none
+    aircraft_efficiency_grade: Optional[str] = None   # A, B, C, D, E
+    co2_per_ask_g: Optional[float] = None             # grams CO2 per available seat-km
+    grade_source: str = "no_data"                     # icao_actual, industry_average, no_data
+    percentile_in_aircraft_type: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +243,7 @@ class ReportResponse(BaseModel):
     extracted: ExtractedDocument
     score: ESGScore
     vessel_efficiency: Optional[VesselEfficiencyResult] = None
+    aircraft_result: Optional[AircraftEmissionResult] = None 
     explanation: str
     flags: list[str] = Field(default_factory=list)
     needs_human_review: bool = False
@@ -355,6 +349,7 @@ class MultiDocumentReportResponse(BaseModel):
     conflicts: list[FieldConflict] = Field(default_factory=list)
     score: Optional[ESGScore] = None
     vessel_efficiency: Optional[VesselEfficiencyResult] = None
+    aircraft_result: Optional[AircraftEmissionResult] = None
     explanation: str = ""
     flags: list[str] = Field(default_factory=list)
     needs_human_review: bool = False

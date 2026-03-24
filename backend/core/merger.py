@@ -26,6 +26,28 @@ from backend.models.schemas import (
 
 log = logging.getLogger(__name__)
 
+
+def _normalize_str(s: str) -> str:
+    """Normalize a string by collapsing Unicode punctuation variants to ASCII.
+
+    Handles common OCR/copy-paste differences that cause false conflicts:
+    - Em dash \u2013\u2014, en dash, minus sign -> hyphen-minus '-'
+    - Curly quotes -> straight quotes
+    - Multiple spaces -> single space
+    """
+    # Unicode dash variants -> ASCII hyphen
+    for ch in ('\u2013', '\u2014', '\u2012', '\u2212', '\u00ad'):
+        s = s.replace(ch, '-')
+    # Curly/angled quotes -> straight
+    for ch in ('\u2018', '\u2019', '\u201a', '\u201b'):
+        s = s.replace(ch, "'")
+    for ch in ('\u201c', '\u201d', '\u201e', '\u201f'):
+        s = s.replace(ch, '"')
+    # Collapse multiple spaces
+    import re as _re
+    s = _re.sub(r'\s+', ' ', s).strip()
+    return s.lower()
+
 # Cac field scalar can merge (packaging xu ly rieng)
 _SCALAR_FIELDS = [
     "transport_mode",
@@ -114,14 +136,14 @@ def _classify_severity(
             return ConflictSeverity.WARNING
 
     if field_name == "transport_mode":
-        unique_vals = {v.lower().strip() for _, v, _ in non_null if v}
+        unique_vals = {_normalize_str(v) for _, v, _ in non_null if v}
         if len(unique_vals) > 1:
             return ConflictSeverity.CRITICAL
         return ConflictSeverity.INFO
 
     # Port fields: check neu la same location khac ten/format
     if field_name in {"origin_port", "destination_port"}:
-        unique_vals = {v.lower().strip() for _, v, _ in non_null if v}
+        unique_vals = {_normalize_str(v) for _, v, _ in non_null if v}
         if len(unique_vals) <= 1:
             return ConflictSeverity.INFO
 
@@ -177,7 +199,7 @@ def _classify_severity(
     # Cho cac string field khac nhu vessel_name, voyage_number, carrier_name
     # Ap dung fuzzy matching don gian de drop xuong INFO neu la substring hoac rat giong
     if field_name in {"vessel_name", "voyage_number", "carrier_name"}:
-        unique_vals = {v.lower().strip() for _, v, _ in non_null if v}
+        unique_vals = {_normalize_str(v) for _, v, _ in non_null if v}
         if len(unique_vals) <= 1:
             return ConflictSeverity.INFO
         
@@ -199,7 +221,21 @@ def _classify_severity(
         except ImportError:
             pass
 
-    return ConflictSeverity.WARNING
+    # Remaining string fields (cargo_type, etc.)
+    # Normalize + fuzzy match: if all pairs are >= 85% similar, treat as INFO (same meaning).
+    unique_vals = {_normalize_str(v) for _, v, _ in non_null if v}
+    if len(unique_vals) <= 1:
+        return ConflictSeverity.INFO
+    try:
+        from rapidfuzz import fuzz
+        sorted_vals = sorted(unique_vals)
+        for i in range(len(sorted_vals)):
+            for j in range(i + 1, len(sorted_vals)):
+                if fuzz.token_sort_ratio(sorted_vals[i], sorted_vals[j]) < 85:
+                    return ConflictSeverity.WARNING
+        return ConflictSeverity.INFO
+    except ImportError:
+        pass
 
 
 # ---------------------------------------------------------------------------

@@ -205,6 +205,9 @@ _CLASSIFICATION_RULES: dict[DocumentType, dict] = {
             "port of loading", "port of discharge",
             "ocean bill", "house bill", "master bill",
             "place of receipt", "place of delivery",
+            "air waybill", "awb", "awb no", "awb number",
+            "airport of departure", "airport of destination",
+            "flight number", "airline",
         ],
         "supporting": [
             "freight", "container no", "seal no",
@@ -781,7 +784,7 @@ def _safe_packaging_items(items: list) -> list[PackagingItem]:
     return result
 
 
-def _map_to_schema(parsed: dict) -> ExtractedDocument:
+def _map_to_schema(parsed: dict, document_type: str) -> ExtractedDocument:
     transport_raw = parsed.get("transport_mode", {})
     transport_val = str(transport_raw.get("value", "unknown")).lower()
     transport_mode = (
@@ -813,6 +816,7 @@ def _map_to_schema(parsed: dict) -> ExtractedDocument:
         cargo_type=_safe_field(parsed, "cargo_type"),
         packaging_items=_safe_packaging_items(parsed.get("packaging_items", [])),
         routing_stops=routing_stops,
+        source_document_type=document_type,
     )
 
 
@@ -849,7 +853,7 @@ def extract_document(
             raw_text=raw_text,
         )
 
-    doc = _map_to_schema(parsed)
+    doc = _map_to_schema(parsed, document_type)
     doc.raw_text = raw_text
     return doc
 
@@ -886,7 +890,7 @@ def extract_and_classify(
         log.error(f"JSON parse that bai cho {filename}: {e}")
         parsed = {}
 
-    doc = _map_to_schema(parsed)
+    doc = _map_to_schema(parsed, classification.doc_type.value)
     doc.raw_text = raw_text
 
     return classification, doc

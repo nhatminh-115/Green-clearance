@@ -99,18 +99,6 @@ def _infer_ship_type_from_cargo(cargo_type: str) -> str:
     return "General cargo ship"
 
 
-def _parse_eedi(tech_eff: str) -> Optional[float]:
-    """Parse string 'EEDI (4.12 gCO₂/t·nm)' to get 4.12."""
-    if not isinstance(tech_eff, str):
-        return None
-    match = re.search(r"([\d\.]+)", str(tech_eff))
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            pass
-    return None
-
 
 def _get_grade_from_percentile(percentile: float) -> str:
     """Return grade A-E based on percentile (0 is best, 100 is worst)."""
@@ -126,23 +114,6 @@ def _get_grade_from_percentile(percentile: float) -> str:
         return "D"
     return "E"
 
-
-def _get_grade_from_eedi(eedi_value: float, ship_type: str) -> str:
-    """
-    Fallback: Estimate grade based on EEDI. 
-    MEPC.203(62) has complex baselines per ship type and deadweight. 
-    We approximate based on general heuristics relative to EU MRV averages.
-    """
-    # Simply map absolute EEDI values to grades as a fallback heuristic
-    if eedi_value < 5.0:
-        return "A"
-    elif eedi_value < 8.0:
-        return "B"
-    elif eedi_value < 12.0:
-        return "C"
-    elif eedi_value < 18.0:
-        return "D"
-    return "E"
 
 
 def lookup_vessel_efficiency(
@@ -311,11 +282,9 @@ def lookup_vessel_efficiency(
                 result.grade_source = "eu_mrv_actual"
                 
     elif confidence == "low":
-        # Khong dung best_row (vi confidence low la match sai tau)
         cargo_type_str = str(cargo_type or "")
         ship_type_inferred = _infer_ship_type_from_cargo(cargo_type_str)
-        
-        # Fallback to industry average
+
         result.vessel_name_matched = str(vessel_name) if vessel_name else "Unknown"
         result.imo_number = None
         result.efficiency_grade = "C"

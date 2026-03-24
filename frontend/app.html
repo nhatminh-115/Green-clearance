@@ -1264,6 +1264,7 @@ async function analyzeSingle() {
     const res = await fetch(`${API}/upload`, { method: 'POST', body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    resetResultPanel();
     renderSingleResult(data);
   } catch (err) {
     showError(err.message);
@@ -1293,7 +1294,7 @@ async function analyzeMulti() {
       const status = fa.error ? 'error' : 'done';
       updateFileRowStatus(i, status, fa.doc_type);
     });
-
+    resetResultPanel();
     renderMultiResult(data);
   } catch (err) {
     multiFiles.forEach((_, i) => updateFileRowStatus(i, 'error', null));
@@ -1326,9 +1327,9 @@ function renderSingleResult(data) {
   document.getElementById('perFileCard').style.display = 'none';
   document.getElementById('extractedTitle').textContent = 'Extracted Data';
 
-  renderScoreHero(score, null, extracted, data.vessel_efficiency);
+  renderScoreHero(score, null, extracted, data.vessel_efficiency, data);
   renderCo2Breakdown(score);
-  renderEsgQuadrant(score, extracted, data.vessel_efficiency);
+  renderEsgQuadrant(score, extracted, data.vessel_efficiency, data);
   renderBreakdown(score.calculation_steps || []);
   renderExtractedTable(extracted, null);
   document.getElementById('explanationText').textContent = data.explanation || '';
@@ -1338,16 +1339,37 @@ function renderSingleResult(data) {
   _historyReloadHook();
 }
 
-function renderEsgQuadrant(score, extractedDoc, vesselEff) {
+function resetResultPanel() {
+    // Reset tất cả cards về trạng thái ban đầu
+    // để tránh stale DOM từ lần render trước
+    document.getElementById('esgQuadrantCard').style.display = 'none';
+    document.getElementById('conflictsCard').style.display = 'none';
+    document.getElementById('perFileCard').style.display = 'none';
+    document.getElementById('flagsCard').style.display = 'none';
+    document.getElementById('vesselGradeBadge').style.display = 'none';
+    
+    const banner = document.getElementById('haltedBanner');
+    if (banner) banner.style.display = 'none';
+    
+    // Reset score hero về default state
+    // (vì renderHaltedState() có thể đã mutate className và style)
+    const hero = document.getElementById('scoreHero');
+    hero.style.display = '';
+    hero.style.cssText = '';
+}
+
+function renderEsgQuadrant(score, extractedDoc, vesselEff, data) {
+  console.log('aircraft_result:', data && data.aircraft_result);
+  console.log('effGrade:', data && data.aircraft_result && data.aircraft_result.aircraft_efficiency_grade);
   const container = document.getElementById('esgQuadrantCard');
   if (!extractedDoc || !extractedDoc.transport_mode) {
     container.style.display = 'none';
     return;
   }
 
-  const mode = extractedDoc.transport_mode.value || '';
-  // Only display the quadrant matrix for Sea transport since we only have carrier efficiency ratings (MRV data) for vessels.
-  if (mode.toLowerCase() !== 'sea') {
+  const mode = (extractedDoc.transport_mode.value || '').toLowerCase();
+  // Show quadrant for sea (vessel grade) and air (aircraft grade) only
+  if (mode !== 'sea' && mode !== 'air') {
     container.style.display = 'none';
     return;
   }
@@ -1357,15 +1379,14 @@ function renderEsgQuadrant(score, extractedDoc, vesselEff) {
   // Absolute carbon: GREEN = Low, YELLOW/RED = High
   const isHighCarbon = (score.lane !== 'GREEN');
   
-  let isLowEfficiency = true; // default
-  
-  if (vesselEff && vesselEff.efficiency_grade) {
-    if (['A', 'B'].includes(vesselEff.efficiency_grade.toUpperCase())) {
-      isLowEfficiency = false; // High efficiency
-    } else {
-      isLowEfficiency = true;  // Low efficiency (C, D, E)
-    }
+  // Determine efficiency grade from vessel (sea) or aircraft (air)
+  let effGrade = null;
+  if (mode === 'sea' && vesselEff) {
+    effGrade = vesselEff.efficiency_grade;
+  } else if (mode === 'air' && data && data.aircraft_result) {
+    effGrade = data.aircraft_result.aircraft_efficiency_grade;
   }
+  const isLowEfficiency = !effGrade || ['C', 'D', 'E'].includes(effGrade.toUpperCase());
 
   // Reset all
   ['TL', 'TR', 'BL', 'BR'].forEach(pos => {
@@ -1457,10 +1478,10 @@ function renderMultiResult(data) {
   if (data.halted_for_review) {
     renderHaltedState(conflicts, perFile.length);
   } else {
-    renderScoreHero(score, metaText, merged, data.vessel_efficiency);
+    renderScoreHero(score, metaText, merged, data.vessel_efficiency, data);
     renderCo2Breakdown(score);
     renderBreakdown(score.calculation_steps || []);
-    renderEsgQuadrant(score, merged, data.vessel_efficiency);
+    renderEsgQuadrant(score, merged, data.vessel_efficiency, data);
   }
   renderExtractedTable(merged, conflicts);
   renderConflicts(conflicts);
@@ -1523,7 +1544,10 @@ function renderHaltedState(conflicts, fileCount) {
   document.getElementById('co2Transport').closest('.card').style.display = 'none';
 }
 
-function renderScoreHero(score, metaText, extractedDoc, vesselEff) {
+function renderScoreHero(score, metaText, extractedDoc, vesselEff, data) {
+  const mode = (extractedDoc && extractedDoc.transport_mode && extractedDoc.transport_mode.value)
+        ? extractedDoc.transport_mode.value.toLowerCase()
+        : '';
   const lane = score.lane;
   const hero = document.getElementById('scoreHero');
   hero.className = 'score-hero ' + lane.toLowerCase();
@@ -1553,8 +1577,6 @@ function renderScoreHero(score, metaText, extractedDoc, vesselEff) {
       context = 'Top ' + vesselEff.percentile_in_ship_type.toFixed(0) + '% in eu_mrv';
     } else if (vesselEff.grade_source === 'industry_average') {
       context = 'Industry Average (Fallback)';
-    } else if (vesselEff.grade_source === 'glec_eedi_estimate') {
-      context = 'Fallback EEDI estimate';
     } else if (vesselEff.confidence_level === 'high') {
       context = 'Actual intensity matched';
     } else if (vesselEff.confidence_level === 'low') {
@@ -1565,6 +1587,29 @@ function renderScoreHero(score, metaText, extractedDoc, vesselEff) {
     document.getElementById('vesselGradeMeta').innerHTML = context + nameStr + imoStr;
   } else {
     vesselBadge.style.display = 'none';
+  }
+  // Aircraft efficiency badge
+  const aircraftResult = data && data.aircraft_result;
+  if (mode === 'air' && aircraftResult && aircraftResult.aircraft_efficiency_grade) {
+      vesselBadge.style.display = 'flex';
+      document.getElementById('vesselGradeLetter').textContent = 
+          'Grade ' + aircraftResult.aircraft_efficiency_grade;
+      
+      let context = 'Aircraft type benchmark';
+      if (aircraftResult.percentile_in_type_class != null) {
+          context = 'Top ' + aircraftResult.percentile_in_type_class.toFixed(0) 
+                  + '% vs peer aircraft';
+      }
+      if (aircraftResult.confidence === 'low') {
+          context += ' (inferred)';
+      }
+
+      const nameStr = aircraftResult.aircraft_name 
+          ? '<br>' + aircraftResult.aircraft_name : '';
+      document.getElementById('vesselGradeMeta').innerHTML = 
+          context + nameStr;
+  } else if (mode !== 'sea') {
+      vesselBadge.style.display = 'none';
   }
 }
 

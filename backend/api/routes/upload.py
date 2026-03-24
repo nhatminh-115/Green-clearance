@@ -360,7 +360,7 @@ async def upload_multi_document(
     from backend.core.agent import run_pipeline_from_doc
 
     try:
-        filled_doc, esg_score, vessel_eff, explanation = run_pipeline_from_doc(merged_doc)
+        filled_doc, esg_score, vessel_eff, aircraft_result, explanation = run_pipeline_from_doc(merged_doc)
     except Exception as e:
         log.exception(f"Pipeline (from doc) that bai: {e}")
         raise HTTPException(status_code=500, detail=f"Tinh toan ESG score that bai: {e}")
@@ -374,6 +374,7 @@ async def upload_multi_document(
         conflicts=conflicts,
         score=esg_score,
         vessel_efficiency=vessel_eff,
+        aircraft_result=aircraft_result,
         explanation=explanation,
         flags=filled_doc.low_confidence_fields,
         halted_for_review=False,
