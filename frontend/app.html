@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Green Clearance — ESG Logistics Intelligence</title>
+<title>Green Clearance — Carbon Logistics Intelligence</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -469,6 +470,37 @@ select:focus { border-color: var(--accent); }
   padding: 20px 0; text-align: center;
 }
 
+.history-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.history-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+  background: var(--off);
+}
+.history-stat-label {
+  font-size: 9px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.history-stat-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.history-stat.green { background: #f0fdf8; border-color: #a7e8cc; }
+.history-stat.yellow { background: #fffbf0; border-color: #f8dfa0; }
+.history-stat.red { background: #fde8e8; border-color: #f5b8b8; }
+
 .history-lane-strip {
   width: 3px; height: 36px; border-radius: 2px; flex-shrink: 0;
 }
@@ -544,7 +576,6 @@ select:focus { border-color: var(--accent); }
   text-transform: uppercase;
 }
 .history-refresh:hover { opacity: 0.7; }
-
 .score-halted {
   border-radius: var(--radius); padding: 28px 32px;
   background: linear-gradient(135deg, #1a1a2e, #2d1b4e);
@@ -603,6 +634,24 @@ select:focus { border-color: var(--accent); }
   font-family: 'DM Mono', monospace; font-size: 10px;
   color: var(--muted); flex-shrink: 0; text-align: right;
 }
+/* --- NEW TAB STYLES --- */
+.nav-tabs { display: flex; gap: 24px; margin-left: 40px; flex: 1; }
+.nav-tab {
+  color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 600; 
+  text-decoration: none; padding: 22px 0; border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.nav-tab:hover { color: var(--white); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* --- HISTORY DASHBOARD STYLES --- */
+.history-dashboard { padding-top: 20px; }
+.history-dashboard .history-stats { grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+.history-dashboard .history-stat { padding: 20px; }
+.history-dashboard .history-stat-label { font-size: 12px; }
+.history-dashboard .history-stat-value { font-size: 28px; }
+.history-dashboard .history-entry-row { padding: 16px; font-size: 14px; }
+.history-dashboard .history-filename { max-width: 300px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -617,8 +666,12 @@ select:focus { border-color: var(--accent); }
     </div>
     <div>
       <div class="logo-text">Green Clearance</div>
-      <div class="logo-sub">ESG Logistics Intelligence</div>
+      <div class="logo-sub">Carbon Logistics Intelligence</div>
     </div>
+  </div>
+  <div class="nav-tabs">
+    <a href="#" id="tabScanner" class="nav-tab active" onclick="switchTab('scanner')">Scanner</a>
+    <a href="#" id="tabHistory" class="nav-tab" onclick="switchTab('history')">History Dashboard</a>
   </div>
   <div class="topbar-right">
     <div class="status-dot"></div>
@@ -627,7 +680,7 @@ select:focus { border-color: var(--accent); }
 </div>
 
 <div class="page">
-  <div class="grid-main">
+  <div id="viewScanner" class="grid-main">
 
     <!-- LEFT: Upload Panel -->
     <div>
@@ -699,7 +752,7 @@ select:focus { border-color: var(--accent); }
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;vertical-align:middle;margin-right:6px">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
               </svg>
-              Analyse ESG
+              Analyse Emissions
             </span>
           </button>
         </div>
@@ -714,7 +767,7 @@ select:focus { border-color: var(--accent); }
               <line x1="6" y1="20" x2="6" y2="14"/>
             </svg>
           </div>
-          <div class="card-title">ESG Scoring Reference</div>
+          <div class="card-title">Emissions Scoring Reference</div>
         </div>
         <div class="card-body" style="padding:16px">
 
@@ -726,7 +779,7 @@ select:focus { border-color: var(--accent); }
           <div class="threshold-row green">
             <div class="threshold-lane">GREEN</div>
             <div class="threshold-score">≥ 70</div>
-            <div class="threshold-desc">ESG compliant — low emissions, efficient transport</div>
+            <div class="threshold-desc">Target compliant — low emissions, efficient transport</div>
             <div class="threshold-intensity">&lt; 3,100 kg/t</div>
           </div>
           <div class="threshold-row yellow">
@@ -751,40 +804,8 @@ select:focus { border-color: var(--accent); }
         </div>
       </div>
 
-      <!-- Scan History -->
-      <div class="card history-card">
-        <div class="card-header" style="cursor:pointer;user-select:none" onclick="toggleHistory()">
-          <div class="card-header-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
-            </svg>
-          </div>
-          <div class="card-title" style="flex:1">Scan History</div>
-          <svg id="historyChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" style="transition:transform 0.25s;flex-shrink:0">
-            <polyline points="6,9 12,15 18,9"/>
-          </svg>
-        </div>
-        <div id="historyBody" style="display:none">
-          <div id="historyContent" style="padding:12px 16px 16px">
-            <div class="history-empty" id="historyEmpty">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--border);margin-bottom:8px">
-                <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
-              </svg>
-              <div style="font-size:12px;color:var(--muted)">No scans yet</div>
-            </div>
-            <div id="historyList" style="display:none"></div>
-            <div id="historyLoading" style="display:none;text-align:center;padding:20px">
-              <div class="history-spinner"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
     <!-- RIGHT: Result Panel -->
-    <div>
-      <div class="error-box" id="errorBox"></div>
+    </div><div> <div class="error-box" id="errorBox"></div>
 
       <div class="card" id="emptyState">
         <div class="empty-state">
@@ -794,7 +815,7 @@ select:focus { border-color: var(--accent); }
             </svg>
           </div>
           <div class="empty-title">No results yet</div>
-          <div class="empty-sub">Upload logistics documents to analyse ESG score</div>
+          <div class="empty-sub">Upload logistics documents to analyse Carbon score</div>
         </div>
       </div>
 
@@ -862,7 +883,7 @@ select:focus { border-color: var(--accent); }
                 <line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
               </svg>
             </div>
-            <div class="card-title">Dual-Score ESG Quadrant</div>
+            <div class="card-title">Dual-Score Carbon Quadrant</div>
           </div>
           <div class="card-body">
             <div class="esg-matrix-wrap">
@@ -988,8 +1009,49 @@ select:focus { border-color: var(--accent); }
       </div>
     </div>
   </div>
-</div>
-
+<div id="viewHistory" class="history-dashboard" style="display: none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+          </svg>
+        </div>
+        <div class="card-title">Global Scan History</div>
+        
+        <button id="btnExportHistory" onclick="exportHistoryExcel()" style="margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; background: #e6f9f0; color: #0d7a4e; border: 1px solid #a7e8cc; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export .xlsx
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="history-stats" id="historyStats" style="display:none"></div>
+        <div id="emissionsTotals" style="display:none; margin-bottom: 24px; padding: 16px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+          <div style="font-size: 11px; font-weight: 600; color: var(--navy); margin-bottom: 6px;">🌍 Total CO₂e Emissions</div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div><span style="color:var(--muted);">Today:</span> <span id="emissionsToday" style="font-size:12px;">—</span></div>
+            <div><span style="color:var(--muted);">This week:</span> <span id="emissionsWeek" style="font-size:12px;">—</span></div>
+            <div><span style="color:var(--muted);">This month:</span> <span id="emissionsMonth" style="font-size:12px;">—</span></div>
+            <div><span style="color:var(--muted);">This year:</span> <span id="emissionsYear" style="font-size:12px;">—</span></div>
+          </div>
+        </div>
+        <div class="history-empty" id="historyEmpty">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--border);margin-bottom:8px">
+            <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+          </svg>
+          <div style="font-size:12px;color:var(--muted)">No scans yet</div>
+        </div>
+        <div id="historyList" style="display:none"></div>
+        <div id="historyLoading" style="display:none;text-align:center;padding:40px">
+          <div class="history-spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 <script>
 // Automatically detect the host (for LAN access like 192.168.x.x)
 const API = window.location.protocol === 'file:' 
@@ -1002,6 +1064,24 @@ const API = window.location.protocol === 'file:'
 let currentMode = 'single';       // 'single' | 'multi'
 let multiFiles = [];               // Array of File objects (multi mode)
 
+// --- NEW TAB SWITCHING LOGIC ---
+let currentTab = 'scanner';
+
+function switchTab(tab) {
+  currentTab = tab;
+  // Toggle Views
+  document.getElementById('viewScanner').style.display = tab === 'scanner' ? 'grid' : 'none';
+  document.getElementById('viewHistory').style.display = tab === 'history' ? 'block' : 'none';
+  
+  // Toggle Nav Active States
+  document.getElementById('tabScanner').classList.toggle('active', tab === 'scanner');
+  document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
+  
+  // Fetch data if entering history tab
+  if (tab === 'history') {
+    loadHistory();
+  }
+}
 // ---------------------------------------------------------------------------
 // DOM refs
 // ---------------------------------------------------------------------------
@@ -1452,7 +1532,7 @@ function renderMultiResult(data) {
         </svg>
         <div>
           <div style="font-size:15px;font-weight:700;margin-bottom:4px">Halted — Human Review Required</div>
-          <div style="font-size:12px;opacity:0.8">Critical conflicts detected between documents. ESG score was not calculated. Resolve the conflicts below and re-upload with corrected documents.</div>
+          <div style="font-size:12px;opacity:0.8">Critical conflicts detected between documents. Carbon score was not calculated. Resolve the conflicts below and re-upload with corrected documents.</div>
         </div>`;
       resultPanel.insertBefore(banner, resultPanel.firstChild);
     }
@@ -1533,7 +1613,7 @@ function renderHaltedState(conflicts, fileCount) {
         <div class="score-halted-title">Scoring Halted — Human Review Required</div>
         <div class="score-halted-sub">
           ${critCount} critical conflict${critCount > 1 ? 's' : ''} detected across ${fileCount} documents.
-          ESG score cannot be calculated until data inconsistencies are resolved.
+          Carbon score cannot be calculated until data inconsistencies are resolved.
           Review the conflicts below, correct the source documents, and re-upload.
         </div>
       </div>
@@ -1552,7 +1632,7 @@ function renderScoreHero(score, metaText, extractedDoc, vesselEff, data) {
   const hero = document.getElementById('scoreHero');
   hero.className = 'score-hero ' + lane.toLowerCase();
   document.getElementById('scoreNumber').textContent = score.score.toFixed(1);
-  document.getElementById('scoreLane').textContent = 'ESG Lane — ' + lane;
+  document.getElementById('scoreLane').textContent = 'Carbon Rating — ' + lane;
   document.getElementById('scoreLabel').textContent = laneLabel(lane);
   document.getElementById('scoreCo2').textContent = 'Total emissions: ' + fmtCo2(score.total_co2e_kg);
 
@@ -1948,7 +2028,7 @@ function showError(msg) {
 
 function laneLabel(lane) {
   const map = {
-    GREEN:  'Green — ESG Compliant',
+    GREEN:  'Green — Target Compliant',
     YELLOW: 'Yellow — Needs Improvement',
     RED:    'Red — Exceeds Threshold',
   };
@@ -1996,114 +2076,209 @@ async function loadHistory() {
   const loading = document.getElementById('historyLoading');
   const list    = document.getElementById('historyList');
   const empty   = document.getElementById('historyEmpty');
+  const statsEl = document.getElementById('historyStats');
+  const emissionsEl = document.getElementById('emissionsTotals');
 
   loading.style.display = 'block';
   list.style.display    = 'none';
   empty.style.display   = 'none';
+  statsEl.style.display = 'none';
+  emissionsEl.style.display = 'none';
 
-  try {
-    const res  = await fetch(`${API}/reports?limit=10`);
-    const data = await res.json();
-
-    loading.style.display = 'none';
-
-    if (!res.ok || !Array.isArray(data) || data.length === 0) {
-      empty.style.display = 'flex';
-      historyLoaded = true;
-      return;
+  async function safeFetch(url) {
+    try {
+      console.log(`Fetching: ${url}`);
+      const res = await fetch(url);
+      console.log(`Response status for ${url}: ${res.status}`);
+      if (!res.ok) {
+        console.warn(`Failed to fetch ${url}: ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      console.log(`Data for ${url}:`, data);
+      return data;
+    } catch (err) {
+      console.error(`Network error fetching ${url}:`, err);
+      return null;
     }
+  }
 
-    list.innerHTML = data.map((r, i) => {
-      const lane     = (r.lane || 'RED').toLowerCase();
-      const score    = typeof r.score === 'number' ? r.score.toFixed(1) : '—';
-      const filename = r.filename || 'unknown';
-      const mode     = r.upload_mode || 'single';
-      const co2e     = typeof r.total_co2e_kg === 'number' ? fmtCo2(r.total_co2e_kg) : '—';
-      const ts       = r.created_at ? relativeTime(r.created_at) : '';
+  let statsData = null, reportsData = null, emissionsData = null;
+  try {
+    [statsData, reportsData, emissionsData] = await Promise.all([
+      safeFetch(`${API}/reports/stats`),
+      safeFetch(`${API}/reports?limit=10`),
+      safeFetch(`${API}/reports/emissions/total`),
+    ]);
+  } catch (err) {
+    console.error('Error fetching data:', err);
+    loading.style.display = 'none';
+    empty.style.display = 'flex';
+    empty.querySelector('div').textContent = 'Could not load history';
+    historyLoaded = false;
+    return;
+  }
 
-      const id      = r.id || '';
-      const origin  = r.origin_port || '—';
-      const dest    = r.destination_port || '—';
-      const tMode   = r.transport_mode || '—';
-      const dist    = r.distance_km != null ? r.distance_km + ' km' : '—';
-      const cargo   = r.cargo_weight_tons != null ? r.cargo_weight_tons + ' t' : '—';
-      const laneUp  = (r.lane || 'RED');
+  loading.style.display = 'none';
 
-      return `
-        <div class="history-entry" id="hentry-${i}" onclick="toggleHistoryEntry(${i})">
-          <div class="history-entry-row">
-            <div class="history-lane-strip ${lane}"></div>
-            <div class="history-score">${score}</div>
-            <div class="history-meta">
-              <div class="history-filename" title="${escHtml(filename)}">${escHtml(filename)}</div>
-              <div class="history-sub">
-                <span class="history-mode-badge">${mode}</span>
-                ${ts ? `<span>${ts}</span>` : ''}
+  // Render stats
+  try {
+    if (statsData && typeof statsData === 'object' && statsData.total_shipments !== undefined) {
+      renderHistoryStats(statsData);
+    } else {
+      console.warn('Stats data invalid, using default');
+      renderHistoryStats({ total: 0, green: 0, yellow: 0, red: 0, average_score: 0 });
+    }
+  } catch (err) {
+    console.error('Error rendering stats:', err);
+    statsEl.style.display = 'none';
+  }
+
+  // Render emissions totals
+  try {
+    if (emissionsData && typeof emissionsData === 'object') {
+      renderEmissionsTotals(emissionsData);
+    } else {
+      console.warn('Emissions data invalid, hiding');
+      emissionsEl.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Error rendering emissions totals:', err);
+    emissionsEl.style.display = 'none';
+  }
+
+  // Render report list
+  try {
+    if (reportsData && Array.isArray(reportsData) && reportsData.length > 0) {
+      list.innerHTML = reportsData.map((r, i) => {
+        const lane = (r.lane || 'RED').toLowerCase();
+        const score = typeof r.score === 'number' ? r.score.toFixed(1) : '—';
+        const filename = r.filename || 'unknown';
+        const mode = r.upload_mode || 'single';
+        const co2e = typeof r.total_co2e_kg === 'number' ? fmtCo2(r.total_co2e_kg) : '—';
+        const ts = r.created_at ? relativeTime(r.created_at) : '';
+
+        const id = r.id || '';
+        const origin = r.origin_port || '—';
+        const dest = r.destination_port || '—';
+        const tMode = r.transport_mode || '—';
+        const dist = r.distance_km != null ? r.distance_km + ' km' : '—';
+        const cargo = r.cargo_weight_tons != null ? r.cargo_weight_tons + ' t' : '—';
+        const laneUp = (r.lane || 'RED');
+
+        return `
+          <div class="history-entry" id="hentry-${i}" onclick="toggleHistoryEntry(${i})">
+            <div class="history-entry-row">
+              <div class="history-lane-strip ${lane}"></div>
+              <div class="history-score">${score}</div>
+              <div class="history-meta">
+                <div class="history-filename" title="${escHtml(filename)}">${escHtml(filename)}</div>
+                <div class="history-sub">
+                  <span class="history-mode-badge">${mode}</span>
+                  ${ts ? `<span>${ts}</span>` : ''}
+                </div>
               </div>
+              <div class="history-co2">${co2e}</div>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s" class="hentry-chev-${i}">
+                <polyline points="6,9 12,15 18,9"/>
+              </svg>
             </div>
-            <div class="history-co2">${co2e}</div>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s" class="hentry-chev-${i}">
-              <polyline points="6,9 12,15 18,9"/>
-            </svg>
-          </div>
-          <div class="history-detail">
-            <table class="history-detail-table">
-              <tr>
-                <td>ID</td>
-                <td style="display:flex;align-items:center;gap:6px">
+            <div class="history-detail">
+              <table class="history-detail-table">
+                 <tr><td>ID</td><td style="display:flex;align-items:center;gap:6px">
                   <span style="word-break:break-all">${escHtml(id)}</span>
                   <span class="history-id-copy" onclick="copyId(event,'${escHtml(id)}')" title="Copy ID" style="flex-shrink:0">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                     </svg>
                   </span>
-                </td>
-              </tr>
-              <tr><td>Lane</td><td><span style="font-weight:600;color:${laneUp==='GREEN'?'#0d7a4e':laneUp==='YELLOW'?'#9c6a00':'#9b1c1c'}">${laneUp}</span></td></tr>
-              <tr><td>Score</td><td>${score} / 100</td></tr>
-              <tr><td>Total CO₂e</td><td>${co2e}</td></tr>
-              <tr><td>Transport</td><td>${escHtml(tMode)}</td></tr>
-              <tr><td>Origin</td><td>${escHtml(origin)}</td></tr>
-              <tr><td>Destination</td><td>${escHtml(dest)}</td></tr>
-              <tr><td>Distance</td><td>${escHtml(dist)}</td></tr>
-              <tr><td>Cargo wt.</td><td>${escHtml(cargo)}</td></tr>
-              <tr><td>Mode</td><td>${escHtml(mode)}</td></tr>
-            </table>
-          </div>
-        </div>`;
-    }).join('');
+                 </td></tr>
+                 <tr><td>Lane</td><td><span style="font-weight:600;color:${laneUp==='GREEN'?'#0d7a4e':laneUp==='YELLOW'?'#9c6a00':'#9b1c1c'}">${laneUp}</span></td></tr>
+                 <tr><td>Score</td><td>${score} / 100</td></tr>
+                 <tr><td>Total CO₂e</td><td>${co2e}</td></tr>
+                 <tr><td>Transport</td><td>${escHtml(tMode)}</td></tr>
+                 <tr><td>Origin</td><td>${escHtml(origin)}</td></tr>
+                 <tr><td>Destination</td><td>${escHtml(dest)}</td></tr>
+                 <tr><td>Distance</td><td>${escHtml(dist)}</td></tr>
+                 <tr><td>Cargo wt.</td><td>${escHtml(cargo)}</td></tr>
+                 <tr><td>Mode</td><td>${escHtml(mode)}</td></tr>
+              </table>
+            </div>
+          </div>`;
+      }).join('');
+      list.style.display = 'block';
 
-    list.style.display = 'block';
-
-    // Refresh link
-    const existing = list.nextElementSibling;
-    if (!existing || !existing.classList.contains('history-refresh')) {
-      const refreshEl = document.createElement('div');
-      refreshEl.className = 'history-refresh';
-      refreshEl.innerHTML = `
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="23,4 23,11 16,11"/>
-          <path d="M20.49 15a9 9 0 11-2.12-9.36L23 11"/>
-        </svg>
-        Refresh`;
-      refreshEl.onclick = () => { historyLoaded = false; loadHistory(); };
-      list.parentNode.insertBefore(refreshEl, list.nextSibling);
+      // Add refresh link if needed
+      const existing = list.nextElementSibling;
+      if (!existing || !existing.classList.contains('history-refresh')) {
+        const refreshEl = document.createElement('div');
+        refreshEl.className = 'history-refresh';
+        refreshEl.innerHTML = `
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="23,4 23,11 16,11"/>
+            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 11"/>
+          </svg>
+          Refresh`;
+        refreshEl.onclick = () => { historyLoaded = false; loadHistory(); };
+        list.parentNode.insertBefore(refreshEl, list.nextSibling);
+      }
+    } else {
+      empty.style.display = 'flex';
+      empty.querySelector('div').textContent = reportsData ? 'No scans yet' : 'Could not load history';
     }
-
-    historyLoaded = true;
   } catch (err) {
-    loading.style.display = 'none';
-    empty.style.display   = 'flex';
+    console.error('Error rendering report list:', err);
+    empty.style.display = 'flex';
     empty.querySelector('div').textContent = 'Could not load history';
-    historyLoaded = false;
   }
+
+  historyLoaded = true;
+}
+
+function renderHistoryStats(stats) {
+  const statsEl = document.getElementById('historyStats');
+  const total = Number.isFinite(Number(stats.total_shipments)) ? Number(stats.total_shipments) : 0;
+  const green = Number.isFinite(Number(stats.green)) ? Number(stats.green) : 0;
+  const yellow = Number.isFinite(Number(stats.yellow)) ? Number(stats.yellow) : 0;
+  const red = Number.isFinite(Number(stats.red)) ? Number(stats.red) : 0;
+  const avg = Number.isFinite(Number(stats.average_score)) ? Number(stats.average_score) : 0;
+
+  statsEl.innerHTML = `
+    <div class="history-stat">
+      <div class="history-stat-label">Total</div>
+      <div class="history-stat-value">${total}</div>
+    </div>
+    <div class="history-stat green">
+      <div class="history-stat-label">Green</div>
+      <div class="history-stat-value">${green}</div>
+    </div>
+    <div class="history-stat yellow">
+      <div class="history-stat-label">Yellow</div>
+      <div class="history-stat-value">${yellow}</div>
+    </div>
+    <div class="history-stat red">
+      <div class="history-stat-label">Red</div>
+      <div class="history-stat-value">${red}</div>
+    </div>
+    <div class="history-stat">
+      <div class="history-stat-label">Avg Score</div>
+      <div class="history-stat-value">${avg.toFixed(1)}</div>
+    </div>
+  `;
+  statsEl.style.display = 'grid';
 }
 
 // Auto-reload history after each successful scan
 // Hook vao cuoi renderSingleResult va renderMultiResult bang cach
 // append call sau khi ham chinh chay xong — tranh override conflict.
+// Auto-reload history after each successful scan
 const _historyReloadHook = () => {
-  if (historyOpen) { historyLoaded = false; loadHistory(); }
+  // Always mark history as stale so next open reloads
+  historyLoaded = false;
+  // If the user is currently looking at the history tab, reload immediately
+  if (currentTab === 'history') {
+    loadHistory();
+  }
 };
 
 function toggleHistoryEntry(i) {
@@ -2132,6 +2307,103 @@ function relativeTime(iso) {
   return Math.floor(s / 86400) + 'd ago';
 }
 
+function renderEmissionsTotals(data) {
+  const container = document.getElementById('emissionsTotals');
+  if (!data) {
+    container.style.display = 'none';
+    return;
+  }
+  const fmt = (kg) => {
+    if (kg === undefined || kg === null) return '—';
+    return kg >= 1000 ? (kg/1000).toFixed(1) + ' t' : kg.toFixed(1) + ' kg';
+  };
+  document.getElementById('emissionsToday').textContent = fmt(data.today);
+  document.getElementById('emissionsWeek').textContent = fmt(data.week);
+  document.getElementById('emissionsMonth').textContent = fmt(data.month);
+  document.getElementById('emissionsYear').textContent = fmt(data.year);
+  container.style.display = 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Export History to Excel (.xlsx) using SheetJS
+// ---------------------------------------------------------------------------
+async function exportHistoryExcel() {
+  const btn = document.getElementById('btnExportHistory');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = 'Exporting...';
+  btn.disabled = true;
+
+  try {
+    // 1. Fetch up to 1000 latest scans from your backend
+    const res = await fetch(`${API}/reports?limit=1000`);
+    if (!res.ok) throw new Error("Failed to fetch reports for export");
+    const data = await res.json();
+
+    if (!data || data.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+
+    // 2. Format the data perfectly for Excel
+    // We convert strings to numbers where appropriate so Excel formulas work instantly!
+    const formattedData = data.map(r => ({
+      "Scan ID": r.id || "",
+      "Date": r.created_at ? new Date(r.created_at).toLocaleString() : "",
+      "Filename": r.filename || "",
+      "Upload Mode": r.upload_mode || "single",
+      "Carbon Lane": r.lane || "RED",
+      "Score": r.score != null ? Number(r.score.toFixed(2)) : null,
+      "Total CO2e (kg)": r.total_co2e_kg != null ? Number(r.total_co2e_kg.toFixed(2)) : null,
+      "Transport CO2e (kg)": r.transport_co2e_kg != null ? Number(r.transport_co2e_kg.toFixed(2)) : null,
+      "Packaging CO2e (kg)": r.packaging_co2e_kg != null ? Number(r.packaging_co2e_kg.toFixed(2)) : null,
+      "Origin Port": r.origin_port || "",
+      "Destination Port": r.destination_port || "",
+      "Transport Mode": r.transport_mode || "",
+      "Distance (km)": r.distance_km != null ? Number(r.distance_km) : null,
+      "Cargo Weight (tons)": r.cargo_weight_tons != null ? Number(r.cargo_weight_tons) : null,
+      "Conflicts": r.conflict_count || 0
+    }));
+
+    // 3. Create a new Worksheet from the JSON data
+    const ws = XLSX.utils.json_to_sheet(formattedData);
+
+    // 4. Auto-size the columns so it looks great when opened
+    const colWidths = [
+      { wch: 38 }, // ID
+      { wch: 22 }, // Date
+      { wch: 30 }, // Filename
+      { wch: 12 }, // Mode
+      { wch: 10 }, // Lane
+      { wch: 8 },  // Score
+      { wch: 15 }, // Total CO2
+      { wch: 20 }, // Transport CO2
+      { wch: 20 }, // Packaging CO2
+      { wch: 20 }, // Origin
+      { wch: 20 }, // Destination
+      { wch: 15 }, // Transport Mode
+      { wch: 15 }, // Distance
+      { wch: 20 }, // Cargo Wt
+      { wch: 10 }, // Conflicts
+    ];
+    ws['!cols'] = colWidths;
+
+    // 5. Create a new Workbook and append the Worksheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Carbon Scan History");
+
+    // 6. Generate the .xlsx file and trigger download
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `GreenClearance_History_${dateStr}.xlsx`);
+
+  } catch (err) {
+    console.error("Export error:", err);
+    alert("Export failed: " + err.message);
+  } finally {
+    // Reset the button back to normal
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
 </script>
 </body>
 </html>
