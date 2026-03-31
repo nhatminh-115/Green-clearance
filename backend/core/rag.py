@@ -14,14 +14,20 @@ Fallback: neu ChromaDB miss hoac chua ingest, dung hardcoded EPA values.
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
-
-import chromadb
+from typing import Any
 
 from backend.config import get_settings
 from backend.models.schemas import TransportMode, PackagingMaterial, DisposalMethod
 
 log = logging.getLogger(__name__)
 settings = get_settings()
+
+try:
+    import chromadb  # type: ignore
+    _CHROMADB_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - depends on local environment
+    chromadb = None  # type: ignore
+    _CHROMADB_IMPORT_ERROR = exc
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +110,13 @@ _DISPOSAL_FALLBACK = DisposalMethod.LANDFILLED
 
 @lru_cache(maxsize=1)
 def _get_chroma_client():
+    if chromadb is None:
+        log.warning(
+            "ChromaDB import failed: %s. Using fallback factors.",
+            _CHROMADB_IMPORT_ERROR,
+        )
+        return None
+
     try:
         client = chromadb.PersistentClient(path=settings.chroma_persist_path)
         return client
@@ -112,7 +125,7 @@ def _get_chroma_client():
         return None
 
 
-def _get_collection(name: str) -> chromadb.Collection | None:
+def _get_collection(name: str) -> Any | None:
     client = _get_chroma_client()
     if client is None:
         return None

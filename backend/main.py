@@ -15,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(name)s — %(message)s",
 )
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -25,13 +26,13 @@ async def lifespan(app: FastAPI):
     # de tranh cold start lat khi user upload file
     from backend.core.rag import _get_chroma_client
     _get_chroma_client()
-    logging.getLogger(__name__).info("ChromaDB warmed up")
+    logger.info("ChromaDB warmup finished")
     yield
     # Shutdown: khong can cleanup gi them
 
 
 app = FastAPI(
-    title="Green Clearance",
+    title="GreenCalyx AI",
     description="ESG scoring for logistics documents",
     version="0.1.0",
     lifespan=lifespan,

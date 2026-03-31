@@ -1,4 +1,4 @@
-# Green Clearance
+# GreenCalyx AI
 
 Logistics emissions scoring tool. Upload trade documents (Commercial Invoice, Packing List, Bill of Lading, TDS, PPWR), get CO2e emissions calculated and an ESG score with GREEN / YELLOW / RED lane classification.
 

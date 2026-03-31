@@ -28,7 +28,7 @@ if __name__ == "__main__":
         threading.Thread(target=open_browser, daemon=True).start()
 
     print("==================================================")
-    print("      KHỞI ĐỘNG HỆ THỐNG GREEN CLEARANCE          ")
+    print("      KHỞI ĐỘNG HỆ THỐNG GREENCALYX AI          ")
     print("==================================================")
     
     # Khởi động Backend (FastAPI) bằng Uvicorn
